@@ -8,6 +8,7 @@ import math
 
 def main():
     pygame.init()
+    # Initialisiere das Pygame-Fenster
     screen = pygame.display.set_mode(settings.SCREEN_SIZE)
     pygame.display.set_caption(settings.CAPTION)
     clock = pygame.time.Clock()
@@ -18,34 +19,31 @@ def main():
     bg_music = pygame.mixer.Sound('audio/music.wav')
     bg_music.play(loops=-1)
 
-    # Player and Obstacle Groups
+    # Spieler- und Hindernisgruppen
     player = pygame.sprite.GroupSingle()
     player.add(Player())
     obstacle_group = pygame.sprite.Group()
 
-    # Load the sky and ground surfaces
-    sky_surface_original = pygame.image.load('graphics/Sky.png').convert()
-    ground_surface_original = pygame.image.load('graphics/ground.png').convert()
+    # Lade Bodenoberflächen
+    ground_surface_original = pygame.image.load('graphics/bg.png').convert()
 
-    # Scale images to new resolution
-    sky_surface = pygame.transform.scale(sky_surface_original, (1280, 360))
-    ground_surface = pygame.transform.scale(ground_surface_original, (1280, 440))  
+    # Skaliere die Bilder auf die neue Auflösung + Scrolling
+    ground_surface = pygame.transform.scale(ground_surface_original, (settings.SCREEN_SIZE[0], settings.SCREEN_SIZE[1])) 
     ground_surface_width = ground_surface.get_width()
     tiles = math.ceil(settings.SCREEN_SIZE[0] / ground_surface_width) + 1
     scroll = 0
 
-
-    # Load all standing images for animation
+    # Lade alle stehenden Bilder für die Animation des Spielers
     player_stand_images = [pygame.image.load(f'graphics/player/player_stand_{i}.png').convert_alpha() for i in range(1, 6)]
     player_stand_index = 0
 
-    # Intro screen elements
+    # Elemente für den Einführungsbildschirm
     game_name = test_font.render('PirateBay', False, (111, 196, 169))
     game_name_rect = game_name.get_rect(center=(640, 160))
     game_message = test_font.render('Leertaste zum Starten und Springen, "S" oder "STRG" zum Ducken', False, (111, 196, 169))
     game_message_rect = game_message.get_rect(center=(640, 660))
 
-    # Timer for obstacle generation
+    # Timer für die Generierung von Hindernissen
     obstacle_timer = pygame.USEREVENT + 1
     pygame.time.set_timer(obstacle_timer, 1500)
 
@@ -69,13 +67,12 @@ def main():
                 if event.type == obstacle_timer:
                     obstacle_group.add(Obstacle(choice(['fly', 'snail', 'snail', 'snail'])))
 
-        scroll -= 5
-        if abs(scroll) > ground_surface_width:
+        scroll -= 4
+        if scroll <= -ground_surface_width:
             scroll = 0
 
         if game_active:
-            screen.blit(sky_surface, (0, 0))
-            for i in range(0, tiles):
+            for i in range(2):  # Two images are enough to cover the screen without tearing
                 screen.blit(ground_surface, (i * ground_surface_width + scroll, settings.SCREEN_SIZE[1] - ground_surface.get_height()))
             score = display_score(screen, start_time, test_font)
             
@@ -100,7 +97,7 @@ def main():
             if score == 0:
                 screen.blit(game_message, game_message_rect)
             else:
-                score_message = test_font.render(f'Your score: {score}', False, (111, 196, 169))
+                score_message = test_font.render(f'Dein Punktestand: {score}', False, (111, 196, 169))
                 score_message_rect = score_message.get_rect(center=(640, 660))
                 screen.blit(score_message, score_message_rect)
 

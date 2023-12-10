@@ -11,11 +11,11 @@ class Obstacle(pygame.sprite.Sprite):
             fly_1 = pygame.image.load('graphics/fly/fly1.png').convert_alpha()
             fly_2 = pygame.image.load('graphics/fly/fly2.png').convert_alpha()
             self.frames = [fly_1, fly_2]
-            y_pos = 245
+            y_pos = 515
         else:
             enemy_frames = [pygame.image.load(f'graphics/enemy/enemy{i}.png').convert_alpha() for i in range(1, 7)]
             self.frames = enemy_frames
-            y_pos = 300
+            y_pos = 555
 
         self.animation_index = 0
         self.image = self.frames[self.animation_index]

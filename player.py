@@ -6,12 +6,11 @@ class Player(pygame.sprite.Sprite):
         self.load_images()
         self.player_index = 0
         self.image = self.player_stand[0]
-        self.rect = self.image.get_rect(midbottom=(80, 300))
+        self.rect = self.image.get_rect(midbottom=(80, 555))
         self.gravity = 0
         self.ducking = False
         self.original_rect_height = self.rect.height
         self.duck_rect_height = self.original_rect_height * 0.85
-
         self.jump_sound = pygame.mixer.Sound('audio/jump.mp3')
         self.jump_sound.set_volume(0.5)
 
@@ -23,7 +22,7 @@ class Player(pygame.sprite.Sprite):
 
     def player_input(self):
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_SPACE] and self.rect.bottom >= 300:
+        if keys[pygame.K_SPACE] and self.rect.bottom >= 555:
             self.gravity = -20
             self.jump_sound.play()
         if keys[pygame.K_s] or keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]:
@@ -34,11 +33,11 @@ class Player(pygame.sprite.Sprite):
     def apply_gravity(self):
         self.gravity += 1
         self.rect.y += self.gravity
-        if self.rect.bottom >= 300:
-            self.rect.bottom = 300
+        if self.rect.bottom >= 555:
+            self.rect.bottom = 555
 
     def animation_state(self):
-        if self.rect.bottom < 300:
+        if self.rect.bottom < 555:
             self.image = self.player_jump[int(self.player_index) % len(self.player_jump)]
         else:  # On ground
             if self.gravity < 0:
