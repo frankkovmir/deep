@@ -83,7 +83,7 @@ def main():
             player.update()
 
             obstacle_group.draw(screen)
-            obstacle_group.update()
+            obstacle_group.update(score)
 
             game_active = collision_sprite(player, obstacle_group)
             
