@@ -22,18 +22,24 @@ def main():
     player.add(Player())
     obstacle_group = pygame.sprite.Group()
 
-    # Loading the sky and ground surfaces
-    sky_surface = pygame.image.load('graphics/Sky.png').convert()
-    ground_surface = pygame.image.load('graphics/ground.png').convert()
+    # Load the sky and ground surfaces
+    sky_surface_original = pygame.image.load('graphics/Sky.png').convert()
+    ground_surface_original = pygame.image.load('graphics/ground.png').convert()
+
+    # Scale images to new resolution
+    sky_surface = pygame.transform.scale(sky_surface_original, (1280, 360))  # Adjust height as needed
+    ground_surface = pygame.transform.scale(ground_surface_original, (1280, 560))  # Adjust height as needed
+
+
+    # Load all standing images for animation
+    player_stand_images = [pygame.image.load(f'graphics/player/player_stand_{i}.png').convert_alpha() for i in range(1, 6)]
+    player_stand_index = 0
 
     # Intro screen elements
-    player_stand = pygame.image.load('graphics/player/player_stand.png').convert_alpha()
-    player_stand = pygame.transform.rotozoom(player_stand, 0, 2)
-    player_stand_rect = player_stand.get_rect(center=(400, 200))
     game_name = test_font.render('Pixel Runner', False, (111, 196, 169))
-    game_name_rect = game_name.get_rect(center=(400, 80))
+    game_name_rect = game_name.get_rect(center=(640, 160))  # Adjusted for 1280x720
     game_message = test_font.render('Press space to run', False, (111, 196, 169))
-    game_message_rect = game_message.get_rect(center=(400, 330))
+    game_message_rect = game_message.get_rect(center=(640, 660))  # Adjusted for 1280x720
 
     # Timer for obstacle generation
     obstacle_timer = pygame.USEREVENT + 1
@@ -74,6 +80,11 @@ def main():
             
         else:
             screen.fill((94, 129, 162))
+            player_stand_index += 0.1  # Adjust animation speed if necessary
+            if player_stand_index >= len(player_stand_images):
+                player_stand_index = 0
+            player_stand = pygame.transform.rotozoom(player_stand_images[int(player_stand_index)], 0, 2)
+            player_stand_rect = player_stand.get_rect(center=(640, 360))
             screen.blit(player_stand, player_stand_rect)
             screen.blit(game_name, game_name_rect)
 
@@ -81,7 +92,7 @@ def main():
                 screen.blit(game_message, game_message_rect)
             else:
                 score_message = test_font.render(f'Your score: {score}', False, (111, 196, 169))
-                score_message_rect = score_message.get_rect(center=(400, 330))
+                score_message_rect = score_message.get_rect(center=(640, 660))
                 screen.blit(score_message, score_message_rect)
 
         pygame.display.update()

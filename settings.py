@@ -1,3 +1,3 @@
 # Settings for the game
-SCREEN_SIZE = (800, 400)
+SCREEN_SIZE = (1280, 720)
 CAPTION = 'Runner'
