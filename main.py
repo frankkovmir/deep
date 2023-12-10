@@ -28,8 +28,8 @@ def main():
     ground_surface_original = pygame.image.load('graphics/ground.png').convert()
 
     # Scale images to new resolution
-    sky_surface = pygame.transform.scale(sky_surface_original, (1280, 360))  # Adjust height as needed
-    ground_surface = pygame.transform.scale(ground_surface_original, (1280, 440))  # Adjust height as needed
+    sky_surface = pygame.transform.scale(sky_surface_original, (1280, 360))
+    ground_surface = pygame.transform.scale(ground_surface_original, (1280, 440))  
     ground_surface_width = ground_surface.get_width()
     tiles = math.ceil(settings.SCREEN_SIZE[0] / ground_surface_width) + 1
     scroll = 0
@@ -41,9 +41,9 @@ def main():
 
     # Intro screen elements
     game_name = test_font.render('Pixel Runner', False, (111, 196, 169))
-    game_name_rect = game_name.get_rect(center=(640, 160))  # Adjusted for 1280x720
+    game_name_rect = game_name.get_rect(center=(640, 160))
     game_message = test_font.render('Press space to run', False, (111, 196, 169))
-    game_message_rect = game_message.get_rect(center=(640, 660))  # Adjusted for 1280x720
+    game_message_rect = game_message.get_rect(center=(640, 660))
 
     # Timer for obstacle generation
     obstacle_timer = pygame.USEREVENT + 1
