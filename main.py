@@ -4,6 +4,7 @@ from obstacle import Obstacle
 from utilities import display_score, collision_sprite
 import settings
 from random import choice
+import math
 
 def main():
     pygame.init()
@@ -28,7 +29,10 @@ def main():
 
     # Scale images to new resolution
     sky_surface = pygame.transform.scale(sky_surface_original, (1280, 360))  # Adjust height as needed
-    ground_surface = pygame.transform.scale(ground_surface_original, (1280, 560))  # Adjust height as needed
+    ground_surface = pygame.transform.scale(ground_surface_original, (1280, 440))  # Adjust height as needed
+    ground_surface_width = ground_surface.get_width()
+    tiles = math.ceil(settings.SCREEN_SIZE[0] / ground_surface_width) + 1
+    scroll = 0
 
 
     # Load all standing images for animation
@@ -65,9 +69,14 @@ def main():
                 if event.type == obstacle_timer:
                     obstacle_group.add(Obstacle(choice(['fly', 'snail', 'snail', 'snail'])))
 
+        scroll -= 5  # Adjust the scrolling speed as necessary
+        if abs(scroll) > ground_surface_width:
+            scroll = 0
+
         if game_active:
             screen.blit(sky_surface, (0, 0))
-            screen.blit(ground_surface, (0, 300))
+            for i in range(0, tiles):
+                screen.blit(ground_surface, (i * ground_surface_width + scroll, settings.SCREEN_SIZE[1] - ground_surface.get_height()))
             score = display_score(screen, start_time, test_font)
             
             player.draw(screen)
