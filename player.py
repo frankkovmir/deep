@@ -38,10 +38,10 @@ class Player(pygame.sprite.Sprite):
             self.rect.bottom = 300
 
     def animation_state(self):
-        if self.rect.bottom < 300:  # In air
+        if self.rect.bottom < 300:
             self.image = self.player_jump[int(self.player_index) % len(self.player_jump)]
         else:  # On ground
-            if self.gravity < 0:  # Rising in jump
+            if self.gravity < 0:
                 self.image = self.player_jump[0]
             else:
                 self.player_index += 0.1
@@ -53,9 +53,9 @@ class Player(pygame.sprite.Sprite):
         self.player_input()
         self.apply_gravity()
         if self.ducking:
-            self.image = self.player_duck_images[0]  # Assuming first image is for ducking
+            self.image = self.player_duck_images[0]
             self.rect.height = self.duck_rect_height
-            self.rect.y += self.original_rect_height - self.duck_rect_height  # Adjust y-position if needed
+            self.rect.y += self.original_rect_height - self.duck_rect_height
         else:
             self.animation_state()
             self.rect.height = self.original_rect_height

@@ -40,9 +40,9 @@ def main():
     player_stand_index = 0
 
     # Intro screen elements
-    game_name = test_font.render('Pixel Runner', False, (111, 196, 169))
+    game_name = test_font.render('PirateBay', False, (111, 196, 169))
     game_name_rect = game_name.get_rect(center=(640, 160))
-    game_message = test_font.render('Press space to run', False, (111, 196, 169))
+    game_message = test_font.render('Leertaste zum Starten und Springen, "S" oder "STRG" zum Ducken', False, (111, 196, 169))
     game_message_rect = game_message.get_rect(center=(640, 660))
 
     # Timer for obstacle generation
@@ -69,7 +69,7 @@ def main():
                 if event.type == obstacle_timer:
                     obstacle_group.add(Obstacle(choice(['fly', 'snail', 'snail', 'snail'])))
 
-        scroll -= 5  # Adjust the scrolling speed as necessary
+        scroll -= 5
         if abs(scroll) > ground_surface_width:
             scroll = 0
 
@@ -89,7 +89,7 @@ def main():
             
         else:
             screen.fill((94, 129, 162))
-            player_stand_index += 0.1  # Adjust animation speed if necessary
+            player_stand_index += 0.1
             if player_stand_index >= len(player_stand_images):
                 player_stand_index = 0
             player_stand = pygame.transform.rotozoom(player_stand_images[int(player_stand_index)], 0, 2)
