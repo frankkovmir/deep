@@ -1,108 +1,196 @@
 import pygame
-from player import Player
-from obstacle import Obstacle
-from utilities import display_score, collision_sprite
 import settings
 from random import choice
 import math
+import pygame
+from random import randint
 
-def main():
-    pygame.init()
-    # Initialisiere das Pygame-Fenster
-    screen = pygame.display.set_mode(settings.SCREEN_SIZE)
-    pygame.display.set_caption(settings.CAPTION)
-    clock = pygame.time.Clock()
-    test_font = pygame.font.Font('font/Pixeltype.ttf', 50)
-    game_active = False
-    start_time = 0
-    score = 0
-    bg_music = pygame.mixer.Sound('audio/music.wav')
-    bg_music.play(loops=-1)
+def display_score(screen, start_time, test_font):
+    current_time = int(pygame.time.get_ticks() / 1000) - start_time
+    score_surf = test_font.render(f'Punkte: {current_time}', False, (64, 64, 64))
+    score_rect = score_surf.get_rect(center=(400, 50))
+    screen.blit(score_surf, score_rect)
+    return current_time
 
-    # Spieler- und Hindernisgruppen
-    player = pygame.sprite.GroupSingle()
-    player.add(Player())
-    obstacle_group = pygame.sprite.Group()
+def collision_sprite(player, obstacle_group):
+    if pygame.sprite.spritecollide(player.sprite, obstacle_group, False):
+        obstacle_group.empty()
+        return False
+    else: 
+        return True
 
-    # Lade Bodenoberflächen
-    ground_surface_original = pygame.image.load('graphics/bg.png').convert()
+class Obstacle(pygame.sprite.Sprite):
+    base_speed = -5
 
-    # Skaliere die Bilder auf die neue Auflösung + Scrolling
-    ground_surface = pygame.transform.scale(ground_surface_original, (settings.SCREEN_SIZE[0], settings.SCREEN_SIZE[1])) 
-    ground_surface_width = ground_surface.get_width()
-    tiles = math.ceil(settings.SCREEN_SIZE[0] / ground_surface_width) + 1
-    scroll = 0
+    def __init__(self, type):
+        super().__init__()
 
-    # Lade alle stehenden Bilder für die Animation des Spielers
-    player_stand_images = [pygame.image.load(f'graphics/player/player_stand_{i}.png').convert_alpha() for i in range(1, 6)]
-    player_stand_index = 0
+        if type == 'fly':
+            fly_1 = pygame.image.load('graphics/fly/fly1.png').convert_alpha()
+            fly_2 = pygame.image.load('graphics/fly/fly2.png').convert_alpha()
+            self.frames = [fly_1, fly_2]
+            y_pos = 515
+        else:
+            enemy_frames = [pygame.image.load(f'graphics/enemy/enemy{i}.png').convert_alpha() for i in range(1, 7)]
+            self.frames = enemy_frames
+            y_pos = 555
 
-    # Elemente für den Einführungsbildschirm
-    game_name = test_font.render('PirateBay', False, (111, 196, 169))
-    game_name_rect = game_name.get_rect(center=(640, 160))
-    game_message = test_font.render('Leertaste zum Starten und Springen, "S" oder "STRG" zum Ducken', False, (111, 196, 169))
-    game_message_rect = game_message.get_rect(center=(640, 660))
+        self.animation_index = 0
+        self.image = self.frames[self.animation_index]
+        self.rect = self.image.get_rect(midbottom=(randint(1300, 1500), y_pos))
+        self.speed = Obstacle.base_speed 
 
-    # Timer für die Generierung von Hindernissen
-    obstacle_timer = pygame.USEREVENT + 1
-    pygame.time.set_timer(obstacle_timer, 1500)
+    def animation_state(self):
+        self.animation_index += 0.1 
+        if self.animation_index >= len(self.frames):
+            self.animation_index = 0
+        self.image = self.frames[int(self.animation_index)]
 
-    while True:
+    def update(self, score):
+        self.animation_state()
+        speed_increase = score // 15
+        self.speed = Obstacle.base_speed - speed_increase
+        self.rect.x += self.speed
+        self.destroy()
+
+    def destroy(self):
+        if self.rect.x <= -100: 
+            self.kill()
+
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.load_images()
+        self.player_index = 0
+        self.image = self.player_stand[0]
+        self.rect = self.image.get_rect(midbottom=(80, 555))
+        self.gravity = 0
+        self.ducking = False
+        self.original_rect_height = self.rect.height
+        self.duck_rect_height = self.original_rect_height * 0.85
+        self.jump_sound = pygame.mixer.Sound('audio/jump.mp3')
+        self.jump_sound.set_volume(0.5)
+
+    def load_images(self):
+        self.player_walk = [pygame.image.load(f'graphics/player/player_walk_{i}.png').convert_alpha() for i in range(1, 7)]
+        self.player_jump = [pygame.image.load(f'graphics/player/jump_{i}.png').convert_alpha() for i in range(1, 4)]
+        self.player_stand = [pygame.image.load(f'graphics/player/player_stand_{i}.png').convert_alpha() for i in range(1, 6)]
+        self.player_duck_images = [pygame.image.load(f'graphics/player/player_duck_{i}.png').convert_alpha() for i in range(1, 4)]
+
+    def player_input(self):
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_SPACE] and self.rect.bottom >= 555:
+            self.gravity = -20
+            self.jump_sound.play()
+        if keys[pygame.K_s] or keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]:
+            self.ducking = True
+        else:
+            self.ducking = False
+
+    def apply_gravity(self):
+        self.gravity += 1
+        self.rect.y += self.gravity
+        if self.rect.bottom >= 555:
+            self.rect.bottom = 555
+
+    def animation_state(self):
+        if self.rect.bottom < 555:
+            self.image = self.player_jump[int(self.player_index) % len(self.player_jump)]
+        else:  # On ground
+            if self.gravity < 0:
+                self.image = self.player_jump[0]
+            else:
+                self.player_index += 0.1
+                if self.player_index >= len(self.player_walk):
+                    self.player_index = 0
+                self.image = self.player_walk[int(self.player_index)]
+
+    def update(self):
+        self.player_input()
+        self.apply_gravity()
+        if self.ducking:
+            self.image = self.player_duck_images[0]
+            self.rect.height = self.duck_rect_height
+            self.rect.y += self.original_rect_height - self.duck_rect_height
+        else:
+            self.animation_state()
+            self.rect.height = self.original_rect_height
+
+class PirateBayGame:
+    def __init__(self):
+        pygame.init()
+        self.screen = pygame.display.set_mode(settings.SCREEN_SIZE)
+        pygame.display.set_caption(settings.CAPTION)
+        self.clock = pygame.time.Clock()
+        self.test_font = pygame.font.Font('font/Pixeltype.ttf', 50)
+        self.bg_music = pygame.mixer.Sound('audio/music.wav')
+        self.bg_music.play(loops=-1)
+        self._reset_game()
+
+    def _load_resources(self):
+        self.ground_surface_original = pygame.image.load('graphics/bg.png').convert()
+        self.ground_surface = pygame.transform.scale(self.ground_surface_original, (settings.SCREEN_SIZE[0], settings.SCREEN_SIZE[1]))
+        self.ground_surface_width = self.ground_surface.get_width()
+        self.tiles = math.ceil(settings.SCREEN_SIZE[0] / self.ground_surface_width) + 1
+        self.scroll = 0
+
+    def _set_up_timers(self):
+        self.obstacle_timer = pygame.USEREVENT + 1
+        pygame.time.set_timer(self.obstacle_timer, 1500)
+
+    def _reset_game(self):
+        self.game_active = True
+        self.start_time = int(pygame.time.get_ticks() / 1000)  # Reset start time
+        self.score = 0
+        self.player = pygame.sprite.GroupSingle(Player())
+        self.obstacle_group = pygame.sprite.Group()
+        self._load_resources()
+        self._set_up_timers()
+
+    def _handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                return
+                return False
 
-            if game_active:
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_SPACE:
-                        player.sprite.player_input()
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                self.player.sprite.player_input()
 
-            else:
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                    game_active = True
-                    start_time = int(pygame.time.get_ticks() / 1000)
+            if event.type == self.obstacle_timer:
+                self.obstacle_group.add(Obstacle(choice(['fly', 'snail', 'snail', 'snail'])))
 
-            if game_active:
-                if event.type == obstacle_timer:
-                    obstacle_group.add(Obstacle(choice(['fly', 'snail', 'snail', 'snail'])))
+        return True
 
-        scroll -= 4
-        if scroll <= -ground_surface_width:
-            scroll = 0
+    def _update_game_logic(self):
+        self.scroll -= 4
+        if self.scroll <= -self.ground_surface_width:
+            self.scroll = 0
 
-        if game_active:
-            for i in range(2):  # Two images are enough to cover the screen without tearing
-                screen.blit(ground_surface, (i * ground_surface_width + scroll, settings.SCREEN_SIZE[1] - ground_surface.get_height()))
-            score = display_score(screen, start_time, test_font)
-            
-            player.draw(screen)
-            player.update()
+        self.player.update()
+        self.obstacle_group.update(self.score)
+        self.game_active = collision_sprite(self.player, self.obstacle_group)
+        if not self.game_active:
+            self._reset_game()
 
-            obstacle_group.draw(screen)
-            obstacle_group.update(score)
+    def _render(self):
+        for i in range(self.tiles):
+            self.screen.blit(self.ground_surface, (i * self.ground_surface_width + self.scroll, settings.SCREEN_SIZE[1] - self.ground_surface.get_height()))
 
-            game_active = collision_sprite(player, obstacle_group)
-            
-        else:
-            screen.fill((94, 129, 162))
-            player_stand_index += 0.1
-            if player_stand_index >= len(player_stand_images):
-                player_stand_index = 0
-            player_stand = pygame.transform.rotozoom(player_stand_images[int(player_stand_index)], 0, 2)
-            player_stand_rect = player_stand.get_rect(center=(640, 360))
-            screen.blit(player_stand, player_stand_rect)
-            screen.blit(game_name, game_name_rect)
-
-            if score == 0:
-                screen.blit(game_message, game_message_rect)
-            else:
-                score_message = test_font.render(f'Dein Punktestand: {score}', False, (111, 196, 169))
-                score_message_rect = score_message.get_rect(center=(640, 660))
-                screen.blit(score_message, score_message_rect)
-
+        self.score = display_score(self.screen, self.start_time, self.test_font)
+        self.player.draw(self.screen)
+        self.obstacle_group.draw(self.screen)
         pygame.display.update()
-        clock.tick(60)
+
+    def play_step(self):
+        if not self._handle_events():
+            return False
+        self._update_game_logic()
+        self._render()
+        self.clock.tick(60)
+        return True
 
 if __name__ == '__main__':
-    main()
+    game = PirateBayGame()
+    while game.play_step():
+        pass
+    pygame.quit()
