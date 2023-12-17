@@ -1,27 +1,61 @@
+import argparse
 import torch
-from main import ModifiedPirateBayGame
-from model import DeepQNetwork
+from main import SpaceDodgerGame
 from utils import pre_processing
+import numpy as np
+import pygame
 
-image_size = 84
+def get_args():
+    parser = argparse.ArgumentParser("""Test Deep Q Network on SpaceDodger Game""")
+    parser.add_argument("--image_size", type=int, default=84, help="The common width and height for all images")
+    parser.add_argument("--saved_path", type=str, default="trained_models")
 
-# Load the trained model
-model = DeepQNetwork()
-model.load_state_dict(torch.load('dqn_model.pth'))
-model.eval()
+    args = parser.parse_args()
+    return args
 
-env = ModifiedPirateBayGame()
-state = torch.tensor([pre_processing(env, image_size, image_size)], dtype=torch.float)
+def process_frame(frame, image_size):
+    processed_frame = pre_processing(frame, image_size, image_size)
+    return np.squeeze(processed_frame)
 
-while True:
-    with torch.no_grad():
-        action = model(state).max(1)[1].view(1, 1)
-    next_state, _, done = env.play_step_with_agent(action.item())
+def test(opt):
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(123)
+    else:
+        torch.manual_seed(123)
 
-    next_state = torch.tensor([pre_processing(next_state, image_size, image_size)], dtype=torch.float)
+    if torch.cuda.is_available():
+        model = torch.load(f"{opt.saved_path}/space_dodger_final.pth")
+    else:
+        model = torch.load(f"{opt.saved_path}/space_dodger_final.pth", map_location=torch.device('cpu'))
 
-    state = next_state
+    model.eval()
+    game = SpaceDodgerGame()
+    state = game.reset()
+    state_processed = process_frame(state, opt.image_size)
+    state_stack = [state_processed] * 4  # Initialize the state stack
+    clock = pygame.time.Clock()  # Create a clock object
+    fps = 30
 
-    if done:
-        state = env.reset()
-        state = torch.tensor([pre_processing(state, image_size, image_size)], dtype=torch.float)
+    while True:
+        state_tensor = torch.tensor([state_stack], dtype=torch.float)
+        if torch.cuda.is_available():
+            state_tensor = state_tensor.cuda()
+
+        prediction = model(state_tensor)[0]
+        action = torch.argmax(prediction).item()
+
+        next_state, _, done = game.step(action)
+        next_state_processed = process_frame(next_state, opt.image_size)
+
+        next_state_stack = state_stack[1:] + [next_state_processed]
+        state_stack = next_state_stack  # Update the state stack
+        clock.tick(fps)
+
+        game.render()
+
+        if done:
+            break
+
+if __name__ == "__main__":
+    opt = get_args()
+    test(opt)

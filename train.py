@@ -43,7 +43,7 @@ def get_args():
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--epsilon_start", type=float, default=1.0)
     parser.add_argument("--epsilon_end", type=float, default=0.01)
-    parser.add_argument("--num_episodes", type=int, default=1000)
+    parser.add_argument("--num_episodes", type=int, default=2)
     parser.add_argument("--replay_memory_size", type=int, default=50000)
     parser.add_argument("--log_path", type=str, default="tensorboard")
     parser.add_argument("--saved_path", type=str, default="trained_models")
@@ -152,7 +152,7 @@ def train(opt):
         if episode % 100 == 0 and episode != 0:
             torch.save(model.state_dict(), f"{opt.saved_path}/space_dodger_{episode}.pth")
 
-    torch.save(model.state_dict(), f"{opt.saved_path}/space_dodger_final.pth")
+    torch.save(model, f"{opt.saved_path}/space_dodger_final.pth")
     writer.close()
 
 

@@ -25,9 +25,9 @@ spaceship_speed = 10
 spaceship = pygame.Rect(spaceship_x, spaceship_y, spaceship_width, spaceship_height)
 
 # Asteroid properties
-asteroid_min_size, asteroid_max_size = 20, 50
-asteroid_min_speed, asteroid_max_speed = 5, 10
-asteroid_spawn_rate = 30  # Frames
+asteroid_min_size, asteroid_max_size = 10, 80
+asteroid_min_speed, asteroid_max_speed = 2, 20
+asteroid_spawn_rate = 20  # Frames
 asteroids = []
 
 # Game loop
