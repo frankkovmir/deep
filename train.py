@@ -10,7 +10,25 @@ from model import DeepQNetwork
 from main import SpaceDodgerGame
 from utils import pre_processing
 
+import matplotlib.pyplot as plt
+from IPython import display
 
+plt.ion()
+
+def plot(scores, mean_scores):
+    display.clear_output(wait=True)
+    display.display(plt.gcf())
+    plt.clf()
+    plt.title('Training...')
+    plt.xlabel('Number of Episodes')
+    plt.ylabel('Score')
+    plt.plot(scores)
+    plt.plot(mean_scores)
+    plt.ylim(ymin=0)
+    plt.text(len(scores)-1, scores[-1], str(scores[-1]))
+    plt.text(len(mean_scores)-1, mean_scores[-1], str(mean_scores[-1]))
+    plt.show(block=False)
+    plt.pause(.1)
 
 
 def process_frame(frame, image_size):
@@ -122,11 +140,14 @@ def train(opt):
 
             iter_count += 1  # Increment the iteration count
 
-        scores.append(score)
-        total_score += score
+        scores.append(env.points)  # Track the points achieved in the game
+        total_score += env.points
         mean_score = total_score / (episode + 1)
         mean_scores.append(mean_score)
-        writer.add_scalar('Score', score, episode)
+        writer.add_scalar('Score', env.points, episode)
+
+
+        plot(scores, mean_scores)
 
         if episode % 100 == 0 and episode != 0:
             torch.save(model.state_dict(), f"{opt.saved_path}/space_dodger_{episode}.pth")

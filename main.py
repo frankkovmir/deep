@@ -22,9 +22,9 @@ class SpaceDodgerGame:
         self.last_points_time = time.time()
 
         # Asteroid properties
-        self.asteroid_min_size, self.asteroid_max_size = 20, 50
-        self.asteroid_min_speed, self.asteroid_max_speed = 5, 10
-        self.asteroid_spawn_rate = 30  # Frames
+        self.asteroid_min_size, self.asteroid_max_size = 10, 80
+        self.asteroid_min_speed, self.asteroid_max_speed = 2, 20
+        self.asteroid_spawn_rate = 20
         self.asteroids = []
 
         self.reset()
