@@ -134,6 +134,7 @@ def train(opt):
                 writer.add_scalar('Epsilon', epsilon, episode)
 
             env.render()
+            env.update_spaceship_animation()
             # Print training progress
             print("Episode: {}/{}, Iteration: {}, Points: {}, Epsilon: {:.4f}".format(
                 episode + 1, opt.num_episodes, iter_count, env.points, epsilon))

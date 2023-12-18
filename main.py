@@ -7,13 +7,32 @@ class SpaceDodgerGame:
     def __init__(self):
         pygame.init()
 
+        # Load spaceship sprites
+        sprite_sheet = pygame.image.load('assets/ship.png')
+        sprite_width, sprite_height = sprite_sheet.get_size()
+        sprite_width //= 5  # Assuming 5 sprites in a row
+        sprite_height //= 2  # Assuming 2 rows
+        scale_factor = 2  # Scale factor for spaceship
+        self.spaceships = []
+        for i in range(5):
+            rect = pygame.Rect(i * sprite_width, 0, sprite_width, sprite_height)
+            spaceship_sprite = sprite_sheet.subsurface(rect)
+            scaled_sprite = pygame.transform.scale(spaceship_sprite,
+                                                   (sprite_width * scale_factor, sprite_height * scale_factor))
+            self.spaceships.append(scaled_sprite)
+
+        # Spaceship animation variables
+        self.current_spaceship_index = 0
+        self.animation_frame_count = 0
+        self.animation_speed = 5  # Lower is faster
+
         # Game window dimensions
         self.width, self.height = 800, 600
         self.screen = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption("Space Dodger")
 
         # Spaceship properties
-        self.spaceship_width, self.spaceship_height = 40, 60
+        self.spaceship_width, self.spaceship_height = self.spaceships[0].get_size()
         self.spaceship_speed = 10
         self.spaceship = None
 
@@ -36,6 +55,12 @@ class SpaceDodgerGame:
         self.asteroids = []
         self.frame_count = 0
         return self.get_state()
+
+    def update_spaceship_animation(self):
+        self.animation_frame_count += 1
+        if self.animation_frame_count >= self.animation_speed:
+            self.animation_frame_count = 0
+            self.current_spaceship_index = (self.current_spaceship_index + 1) % len(self.spaceships)
 
     def step(self, action):
         # action: 0 - move left, 1 - move right
@@ -80,7 +105,11 @@ class SpaceDodgerGame:
 
     def render(self):
         self.screen.fill((0, 0, 0))  # Black background
-        pygame.draw.rect(self.screen, (255, 255, 255), self.spaceship)  # Draw spaceship
+
+        # Draw current spaceship sprite
+        current_spaceship = self.spaceships[self.current_spaceship_index]
+        self.screen.blit(current_spaceship, self.spaceship.topleft)
+
         for asteroid in self.asteroids:
             pygame.draw.rect(self.screen, (255, 255, 255), asteroid[0])  # Draw asteroids
 
