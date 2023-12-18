@@ -7,6 +7,21 @@ class SpaceDodgerGame:
     def __init__(self):
         pygame.init()
 
+        # Load asteroid sprite sheet
+        asteroid_sheet = pygame.image.load('assets/asteroids.png')
+        asteroid_sprite_width, asteroid_sprite_height = asteroid_sheet.get_size()
+        asteroid_sprite_width //= 8  # Assuming 8 sprites in a row
+        asteroid_sprite_height //= 8  # Assuming 8 rows
+
+        # Extract individual asteroid sprites
+        self.asteroid_sprites = []
+        for row in range(8):
+            for col in range(8):
+                rect = pygame.Rect(col * asteroid_sprite_width, row * asteroid_sprite_height, asteroid_sprite_width, asteroid_sprite_height)
+                asteroid_sprite = asteroid_sheet.subsurface(rect)
+                self.asteroid_sprites.append(asteroid_sprite)
+
+
         # Load spaceship sprites
         sprite_sheet = pygame.image.load('assets/ship.png')
         sprite_width, sprite_height = sprite_sheet.get_size()
@@ -74,15 +89,20 @@ class SpaceDodgerGame:
             asteroid_size = random.randint(self.asteroid_min_size, self.asteroid_max_size)
             asteroid_x = random.randint(0, self.width - asteroid_size)
             asteroid_speed = random.randint(self.asteroid_min_speed, self.asteroid_max_speed)
-            self.asteroids.append([pygame.Rect(asteroid_x, 0, asteroid_size, asteroid_size), asteroid_speed])
+
+            # Select a random sprite and scale it to the asteroid size
+            asteroid_sprite = random.choice(self.asteroid_sprites)
+            scaled_sprite = pygame.transform.scale(asteroid_sprite, (asteroid_size, asteroid_size))
+            self.asteroids.append(
+                [scaled_sprite, pygame.Rect(asteroid_x, 0, asteroid_size, asteroid_size), asteroid_speed])
 
         # Update asteroid positions and check for collisions
         done = False
         for asteroid in self.asteroids:
-            asteroid[0].y += asteroid[1]
-            if asteroid[0].y > self.height:
+            asteroid[1].y += asteroid[2]
+            if asteroid[1].y > self.height:
                 self.asteroids.remove(asteroid)
-            if self.spaceship.colliderect(asteroid[0]):
+            if self.spaceship.colliderect(asteroid[1]):
                 done = True
 
         reward = 1 if not done else -100  # Reward of 1 for surviving a frame, -100 for collision
@@ -111,7 +131,7 @@ class SpaceDodgerGame:
         self.screen.blit(current_spaceship, self.spaceship.topleft)
 
         for asteroid in self.asteroids:
-            pygame.draw.rect(self.screen, (255, 255, 255), asteroid[0])  # Draw asteroids
+            self.screen.blit(asteroid[0], asteroid[1].topleft)  # Use the sprite for drawing
 
         font = pygame.font.Font(None, 36)
         text = font.render(f"Points: {self.points}", True, (255, 255, 255))
