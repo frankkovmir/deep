@@ -43,10 +43,11 @@ def get_args():
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--epsilon_start", type=float, default=1.0)
     parser.add_argument("--epsilon_end", type=float, default=0.01)
-    parser.add_argument("--num_episodes", type=int, default=2)
+    parser.add_argument("--num_episodes", type=int, default=10000)
     parser.add_argument("--replay_memory_size", type=int, default=50000)
     parser.add_argument("--log_path", type=str, default="tensorboard")
     parser.add_argument("--saved_path", type=str, default="trained_models")
+    parser.add_argument("--plot_every", type=int, default=10, help="Plot every n iterations")
     args = parser.parse_args()
     return args
 
@@ -73,12 +74,24 @@ def train(opt):
     model = DeepQNetwork()
     optimizer = torch.optim.Adam(model.parameters(), lr=opt.learning_rate)
     criterion = nn.MSELoss()
-    replay_memory = []
     scores = []
     mean_scores = []
     total_score = 0
 
-    for episode in range(opt.num_episodes):
+    start_episode = 0
+    replay_memory = []
+
+    # Check if a checkpoint exists
+    checkpoint_path = f"{opt.saved_path}/space_dodger_checkpoint.pth"
+    if os.path.exists(checkpoint_path):
+        checkpoint = torch.load(checkpoint_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_episode = checkpoint['episode']
+        replay_memory = checkpoint.get('replay_memory', [])
+        print(f"Resuming training from episode {start_episode}")
+
+    for episode in range(start_episode, opt.num_episodes):
         env = SpaceDodgerGame()
         state = env.reset()
         state_processed = process_frame(state, opt.image_size)
@@ -130,8 +143,9 @@ def train(opt):
                 loss.backward()
                 optimizer.step()
 
-                writer.add_scalar('Loss', loss.item(), episode)
-                writer.add_scalar('Epsilon', epsilon, episode)
+                writer.add_scalar('Episode/Score', env.points, episode)
+                writer.add_scalar('Episode/Loss', loss.item(), episode)
+                writer.add_scalar('Episode/Epsilon', epsilon, episode)
 
             env.render()
             env.update_spaceship_animation()
@@ -147,13 +161,22 @@ def train(opt):
         mean_scores.append(mean_score)
         writer.add_scalar('Score', env.points, episode)
 
+        # Plot every opt.plot_every episodes
+        if episode % opt.plot_every == 0:
+            plot(scores, mean_scores)
 
-        plot(scores, mean_scores)
-
+        # Save checkpoint
         if episode % 100 == 0 and episode != 0:
-            torch.save(model.state_dict(), f"{opt.saved_path}/space_dodger_{episode}.pth")
+            checkpoint = {
+                'episode': episode,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'replay_memory': replay_memory
+            }
+            torch.save(checkpoint, checkpoint_path)
 
-    torch.save(model, f"{opt.saved_path}/space_dodger_final.pth")
+    # final save
+    torch.save(model.state_dict(), f"{opt.saved_path}/space_dodger_final.pth")
     writer.close()
 
 

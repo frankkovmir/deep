@@ -4,6 +4,9 @@ from main import SpaceDodgerGame
 from utils import pre_processing
 import numpy as np
 import pygame
+from model import DeepQNetwork
+import os
+
 
 def get_args():
     parser = argparse.ArgumentParser("""Test Deep Q Network on SpaceDodger Game""")
@@ -18,15 +21,15 @@ def process_frame(frame, image_size):
     return np.squeeze(processed_frame)
 
 def test(opt):
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(123)
-    else:
-        torch.manual_seed(123)
+    model = DeepQNetwork()
 
-    if torch.cuda.is_available():
-        model = torch.load(f"{opt.saved_path}/space_dodger_final.pth")
+    model_path = f"{opt.saved_path}/space_dodger_3300.pth"
+    if os.path.exists(model_path):
+        model_state = torch.load(model_path)
+        model.load_state_dict(model_state)
     else:
-        model = torch.load(f"{opt.saved_path}/space_dodger_final.pth", map_location=torch.device('cpu'))
+        print("No saved model found. Please check the path.")
+        return
 
     model.eval()
     game = SpaceDodgerGame()
