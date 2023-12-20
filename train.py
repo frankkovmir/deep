@@ -9,6 +9,7 @@ from tensorboardX import SummaryWriter
 from model import DeepQNetwork
 from main import SpaceDodgerGame
 from utils import pre_processing
+import pickle
 
 import matplotlib.pyplot as plt
 from IPython import display
@@ -39,15 +40,15 @@ def get_args():
     parser = argparse.ArgumentParser("""Implementation of Deep Q Network for SpaceDodger Game""")
     parser.add_argument("--image_size", type=int, default=84, help="The common width and height for all images")
     parser.add_argument("--batch_size", type=int, default=32, help="The number of images per batch")
-    parser.add_argument("--learning_rate", type=float, default=1e-4)
+    parser.add_argument("--learning_rate", type=float, default=1.25e-4)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--epsilon_start", type=float, default=1.0)
     parser.add_argument("--epsilon_end", type=float, default=0.01)
-    parser.add_argument("--num_episodes", type=int, default=10000)
+    parser.add_argument("--num_episodes", type=int, default=3000)
     parser.add_argument("--replay_memory_size", type=int, default=50000)
     parser.add_argument("--log_path", type=str, default="tensorboard")
     parser.add_argument("--saved_path", type=str, default="trained_models")
-    parser.add_argument("--plot_every", type=int, default=10, help="Plot every n iterations")
+    parser.add_argument("--plot_every", type=int, default=100, help="Plot every n iterations")
     args = parser.parse_args()
     return args
 
@@ -71,7 +72,10 @@ def train(opt):
     os.makedirs(opt.log_path)
     writer = SummaryWriter(opt.log_path)
 
-    model = DeepQNetwork()
+    # GPU sollte genutzt werden
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = DeepQNetwork().to(device)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=opt.learning_rate)
     criterion = nn.MSELoss()
     scores = []
@@ -81,7 +85,9 @@ def train(opt):
     start_episode = 0
     replay_memory = []
 
+
     # Check if a checkpoint exists
+    plot_path = f"{opt.saved_path}/training_plot.pickle"
     checkpoint_path = f"{opt.saved_path}/space_dodger_checkpoint.pth"
     if os.path.exists(checkpoint_path):
         checkpoint = torch.load(checkpoint_path)
@@ -89,6 +95,11 @@ def train(opt):
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_episode = checkpoint['episode']
         replay_memory = checkpoint.get('replay_memory', [])
+        print(f"Resuming training from episode {start_episode}")
+        #load maptlot again
+        if os.path.exists(plot_path):
+            with open(plot_path, 'rb') as f:
+                scores, mean_scores = pickle.load(f)
         print(f"Resuming training from episode {start_episode}")
 
     for episode in range(start_episode, opt.num_episodes):
@@ -150,8 +161,8 @@ def train(opt):
             env.render()
             env.update_spaceship_animation()
             # Print training progress
-            print("Episode: {}/{}, Iteration: {}, Points: {}, Epsilon: {:.4f}".format(
-                episode + 1, opt.num_episodes, iter_count, env.points, epsilon))
+            print("Episode: {}/{}, Iteration: {}, Points: {}, Reward: {}, Epsilon: {:.4f}".format(
+                episode + 1, opt.num_episodes, iter_count, env.points, reward, epsilon))
 
             iter_count += 1  # Increment the iteration count
 
@@ -161,11 +172,11 @@ def train(opt):
         mean_scores.append(mean_score)
         writer.add_scalar('Score', env.points, episode)
 
-        # Plot every opt.plot_every episodes
+        # Plot every 10th episodes
         if episode % opt.plot_every == 0:
             plot(scores, mean_scores)
 
-        # Save checkpoint
+        # Save checkpoint on every 100th episode
         if episode % 100 == 0 and episode != 0:
             checkpoint = {
                 'episode': episode,
@@ -174,6 +185,8 @@ def train(opt):
                 'replay_memory': replay_memory
             }
             torch.save(checkpoint, checkpoint_path)
+            # with open(plot_path, 'wb') as f:
+            #     pickle.dump((scores, mean_scores), f)
 
     # final save
     torch.save(model.state_dict(), f"{opt.saved_path}/space_dodger_final.pth")

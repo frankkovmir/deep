@@ -8,6 +8,7 @@ class SpaceDodgerGame:
     def __init__(self):
         pygame.init()
         mixer.init()
+        self.dodged_asteroids_count = 0
         mixer.music.load('assets/neon-gaming-128925.mp3')
         mixer.music.play(-1)
         # Load asteroid sprite sheet
@@ -75,6 +76,7 @@ class SpaceDodgerGame:
         self.asteroids = []
         self.frame_count = 0
         self.spaceship_mask = self.spaceship_masks[0]
+        self.dodged_asteroids_count = 0
         return self.get_state()
 
     def update_spaceship_animation(self):
@@ -106,27 +108,32 @@ class SpaceDodgerGame:
                 [scaled_sprite, pygame.Rect(asteroid_x, 0, asteroid_size, asteroid_size), asteroid_speed])
 
         done = False
-        for asteroid in self.asteroids:
-            asteroid[1].y += asteroid[2]
-            if asteroid[1].y > self.height:
-                self.asteroids.remove(asteroid)
+        reward = 1  # Base reward for surviving the iteration
 
-            # Collision detection using masks
-            offset_x = asteroid[1].x - self.spaceship.x
-            offset_y = asteroid[1].y - self.spaceship.y
+        for asteroid in self.asteroids:
+            prev_y = asteroid[1].y
+            asteroid[1].y += asteroid[2]
+            new_y = asteroid[1].y
+
             asteroid_mask = pygame.mask.from_surface(asteroid[0])
+            offset_x = asteroid[1].x - self.spaceship.x
+            offset_y = new_y - self.spaceship.y
+
             if self.spaceship_mask.overlap(asteroid_mask, (offset_x, offset_y)):
                 done = True
                 break
 
-        corner_penalty = 0
-        corner_threshold = 50
-        movement_penalty = -0.1  # Small penalty for moving
+            # Increment the dodged asteroids counter
+            if new_y > self.height and prev_y <= self.height:
+                self.dodged_asteroids_count += 1
 
-        if self.spaceship.x < corner_threshold or self.spaceship.x > self.width - self.spaceship_width - corner_threshold:
-            corner_penalty = -0.5  # Penalty for being in the corner
+        # Remove asteroids that have moved off the screen
+        self.asteroids = [asteroid for asteroid in self.asteroids if asteroid[1].y <= self.height]
 
-        reward = 1 + movement_penalty + corner_penalty if not done else -100
+        if done:
+            reward = -5  # Negative reward for collision
+        else:
+            reward += 0.5 * self.dodged_asteroids_count  # Reward for dodging asteroids
 
         self.frame_count += 1
 
@@ -136,7 +143,6 @@ class SpaceDodgerGame:
             self.last_points_time = current_time
 
         return self.get_state(), reward, done
-
     def get_state(self):
         pygame.display.flip()
         data = pygame.surfarray.array3d(self.screen)
