@@ -23,7 +23,7 @@ def process_frame(frame, image_size):
 def test(opt):
     model = DeepQNetwork()
 
-    model_path = f"{opt.saved_path}/space_dodger_3300.pth"
+    model_path = f"{opt.saved_path}/space_dodger_final.pth"
     if os.path.exists(model_path):
         model_state = torch.load(model_path)
         model.load_state_dict(model_state)

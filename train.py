@@ -39,8 +39,8 @@ def process_frame(frame, image_size):
 def get_args():
     parser = argparse.ArgumentParser("""Implementation of Deep Q Network for SpaceDodger Game""")
     parser.add_argument("--image_size", type=int, default=84, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=32, help="The number of images per batch")
-    parser.add_argument("--learning_rate", type=float, default=1.25e-4)
+    parser.add_argument("--batch_size", type=int, default=40, help="The number of images per batch")
+    parser.add_argument("--learning_rate", type=float, default=2.25e-4)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--epsilon_start", type=float, default=1.0)
     parser.add_argument("--epsilon_end", type=float, default=0.01)
@@ -114,7 +114,7 @@ def train(opt):
             epsilon = opt.epsilon_end + (opt.epsilon_start - opt.epsilon_end) * \
                       (1 - episode / opt.num_episodes)
             if np.random.rand() <= epsilon:
-                action = randint(0, 1)
+                action = randint(0, 2)
             else:
                 with torch.no_grad():
                     state_tensor = torch.tensor([state_stack], dtype=torch.float)

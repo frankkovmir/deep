@@ -62,9 +62,9 @@ class SpaceDodgerGame:
         self.last_points_time = time.time()
 
         # Asteroid properties
-        self.asteroid_min_size, self.asteroid_max_size = 10, 80
-        self.asteroid_min_speed, self.asteroid_max_speed = 2, 20
-        self.asteroid_spawn_rate = 20
+        self.asteroid_min_size, self.asteroid_max_size = 20, 60
+        self.asteroid_min_speed, self.asteroid_max_speed = 2, 8
+        self.asteroid_spawn_rate = 5
         self.asteroids = []
 
         self.reset()
@@ -87,14 +87,13 @@ class SpaceDodgerGame:
             self.spaceship_mask = self.spaceship_masks[self.current_spaceship_index]
 
     def step(self, action):
-        if action == 0 and self.spaceship.x > 0:
+        if action == 1 and self.spaceship.x > 0:
             self.spaceship.x -= min(self.spaceship_speed, self.spaceship.x)
-        elif action == 1 and self.spaceship.x < self.width - self.spaceship_width:
+        elif action == 2 and self.spaceship.x < self.width - self.spaceship_width:
             self.spaceship.x += min(self.spaceship_speed, self.width - self.spaceship_width - self.spaceship.x)
 
         if self.frame_count % self.asteroid_spawn_rate == 0:
             asteroid_size = random.randint(self.asteroid_min_size, self.asteroid_max_size)
-            asteroid_x = random.randint(0, self.width - asteroid_size)
             edge_bias = random.random() < 0.2  # 20% chance to spawn near edges
             if edge_bias:
                 # Choose left or right edge
@@ -126,6 +125,10 @@ class SpaceDodgerGame:
             # Increment the dodged asteroids counter
             if new_y > self.height and prev_y <= self.height:
                 self.dodged_asteroids_count += 1
+                # Adjust reward based on asteroid's speed and size
+                asteroid_speed_factor = asteroid[2] / self.asteroid_max_speed
+                asteroid_size_factor = (asteroid[1].width * asteroid[1].height) ** 0.5 / self.asteroid_max_size
+                reward += 0.5 + 0.25 * (asteroid_speed_factor + asteroid_size_factor)
 
         # Remove asteroids that have moved off the screen
         self.asteroids = [asteroid for asteroid in self.asteroids if asteroid[1].y <= self.height]
@@ -136,6 +139,8 @@ class SpaceDodgerGame:
             reward += 0.5 * self.dodged_asteroids_count  # Reward for dodging asteroids
 
         self.frame_count += 1
+
+        # Punkte für langes Überleben
 
         current_time = time.time()
         if current_time - self.last_points_time >= 1:
