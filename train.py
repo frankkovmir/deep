@@ -9,8 +9,6 @@ from tensorboardX import SummaryWriter
 from model import DeepQNetwork
 from main import SpaceDodgerGame
 from utils import pre_processing
-import pickle
-
 import matplotlib.pyplot as plt
 from IPython import display
 
@@ -39,16 +37,16 @@ def process_frame(frame, image_size):
 def get_args():
     parser = argparse.ArgumentParser("""Implementation of Deep Q Network for SpaceDodger Game""")
     parser.add_argument("--image_size", type=int, default=84, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=40, help="The number of images per batch")
-    parser.add_argument("--learning_rate", type=float, default=2.25e-4)
+    parser.add_argument("--batch_size", type=int, default=32, help="The number of images per batch")
+    parser.add_argument("--learning_rate", type=float, default=1e-6)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--epsilon_start", type=float, default=1.0)
     parser.add_argument("--epsilon_end", type=float, default=0.01)
-    parser.add_argument("--num_episodes", type=int, default=3000)
+    parser.add_argument("--num_episodes", type=int, default=10000)
     parser.add_argument("--replay_memory_size", type=int, default=50000)
     parser.add_argument("--log_path", type=str, default="tensorboard")
     parser.add_argument("--saved_path", type=str, default="trained_models")
-    parser.add_argument("--plot_every", type=int, default=100, help="Plot every n iterations")
+    parser.add_argument("--plot_every", type=int, default=2, help="Plot every n iterations")
     args = parser.parse_args()
     return args
 
@@ -86,8 +84,8 @@ def train(opt):
     replay_memory = []
 
 
-    # Check if a checkpoint exists
-    plot_path = f"{opt.saved_path}/training_plot.pickle"
+    # # Check if a checkpoint exists
+    # plot_path = f"{opt.saved_path}/training_plot.pickle"
     checkpoint_path = f"{opt.saved_path}/space_dodger_checkpoint.pth"
     if os.path.exists(checkpoint_path):
         checkpoint = torch.load(checkpoint_path)
@@ -97,9 +95,9 @@ def train(opt):
         replay_memory = checkpoint.get('replay_memory', [])
         print(f"Resuming training from episode {start_episode}")
         #load maptlot again
-        if os.path.exists(plot_path):
-            with open(plot_path, 'rb') as f:
-                scores, mean_scores = pickle.load(f)
+        # if os.path.exists(plot_path):
+        #     with open(plot_path, 'rb') as f:
+        #         scores, mean_scores = pickle.load(f)
         print(f"Resuming training from episode {start_episode}")
 
     for episode in range(start_episode, opt.num_episodes):
@@ -110,6 +108,7 @@ def train(opt):
         score = 0
         done = False
         iter_count = 0  # Track the number of iterations within an episode
+
         while not done:
             epsilon = opt.epsilon_end + (opt.epsilon_start - opt.epsilon_end) * \
                       (1 - episode / opt.num_episodes)
@@ -117,8 +116,9 @@ def train(opt):
                 action = randint(0, 2)
             else:
                 with torch.no_grad():
-                    state_tensor = torch.tensor([state_stack], dtype=torch.float)
-                    action = model(state_tensor).max(1)[1].view(1, 1).item()
+                    state_tensor = torch.tensor([state_stack], dtype=torch.float).to(device)
+                    prediction = model(state_tensor)
+                    action = torch.argmax(prediction).item()
 
             next_state, reward, done = env.step(action)
             next_state_processed = process_frame(next_state, opt.image_size)
@@ -154,27 +154,27 @@ def train(opt):
                 loss.backward()
                 optimizer.step()
 
-                writer.add_scalar('Episode/Score', env.points, episode)
+                writer.add_scalar('Episode/Score', env.current_level, episode)
                 writer.add_scalar('Episode/Loss', loss.item(), episode)
                 writer.add_scalar('Episode/Epsilon', epsilon, episode)
 
             env.render()
             env.update_spaceship_animation()
             # Print training progress
-            print("Episode: {}/{}, Iteration: {}, Points: {}, Reward: {}, Epsilon: {:.4f}".format(
-                episode + 1, opt.num_episodes, iter_count, env.points, reward, epsilon))
+            print("Episode: {}/{}, Iteration: {}, Level: {}, Reward: {}, Epsilon: {:.4f}".format(
+                episode + 1, opt.num_episodes, iter_count, env.current_level, reward, epsilon))
 
             iter_count += 1  # Increment the iteration count
 
-        scores.append(env.points)  # Track the points achieved in the game
-        total_score += env.points
+        scores.append(env.current_level)
+        total_score += env.current_level
         mean_score = total_score / (episode + 1)
         mean_scores.append(mean_score)
-        writer.add_scalar('Score', env.points, episode)
+        writer.add_scalar('Level', env.current_level, episode)
 
-        # Plot every 10th episodes
-        if episode % opt.plot_every == 0:
-            plot(scores, mean_scores)
+        # # Plot every 10th episodes
+        # if episode % opt.plot_every == 0:
+        #     plot(scores, mean_scores)
 
         # Save checkpoint on every 100th episode
         if episode % 100 == 0 and episode != 0:
@@ -185,8 +185,6 @@ def train(opt):
                 'replay_memory': replay_memory
             }
             torch.save(checkpoint, checkpoint_path)
-            # with open(plot_path, 'wb') as f:
-            #     pickle.dump((scores, mean_scores), f)
 
     # final save
     torch.save(model.state_dict(), f"{opt.saved_path}/space_dodger_final.pth")

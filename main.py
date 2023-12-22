@@ -8,9 +8,15 @@ class SpaceDodgerGame:
     def __init__(self):
         pygame.init()
         mixer.init()
-        self.dodged_asteroids_count = 0
+
+        self.dodge_reward = 150
+        self.asteroids_per_level = 1
+        self.current_level = 1
+        self.spawned_asteroids_count = 0
+
         mixer.music.load('assets/neon-gaming-128925.mp3')
         mixer.music.play(-1)
+
         # Load asteroid sprite sheet
         asteroid_sheet = pygame.image.load('assets/asteroids.png')
         asteroid_sprite_width, asteroid_sprite_height = asteroid_sheet.get_size()
@@ -25,14 +31,14 @@ class SpaceDodgerGame:
                 asteroid_sprite = asteroid_sheet.subsurface(rect)
                 self.asteroid_sprites.append(asteroid_sprite)
 
-
         # Load spaceship sprites
         sprite_sheet = pygame.image.load('assets/ship.png')
         sprite_width, sprite_height = sprite_sheet.get_size()
-        sprite_width //= 5  # Assuming 5 sprites in a row
-        sprite_height //= 2  # Assuming 2 rows
-        scale_factor = 2  # Scale factor for spaceship
+        sprite_width //= 5
+        sprite_height //= 2
+        scale_factor = 2
         self.spaceships = []
+
         for i in range(5):
             rect = pygame.Rect(i * sprite_width, 0, sprite_width, sprite_height)
             spaceship_sprite = sprite_sheet.subsurface(rect)
@@ -48,25 +54,20 @@ class SpaceDodgerGame:
         self.animation_speed = 5  # Lower is faster
 
         # Game window dimensions
-        self.width, self.height = 800, 600
+        self.width, self.height = 288, 512
         self.screen = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption("Space Dodger")
 
         # Spaceship properties
         self.spaceship_width, self.spaceship_height = self.spaceships[0].get_size()
-        self.spaceship_speed = 10
+        self.spaceship_speed = 3
         self.spaceship = None
 
-        # Points counter
-        self.points = 0
-        self.last_points_time = time.time()
-
         # Asteroid properties
-        self.asteroid_min_size, self.asteroid_max_size = 20, 60
-        self.asteroid_min_speed, self.asteroid_max_speed = 2, 8
-        self.asteroid_spawn_rate = 5
+        self.asteroid_size = 40
+        self.asteroid_speed = 1
+        self.asteroid_spawn_rate = 60 # not spawning simultatnously
         self.asteroids = []
-
         self.reset()
 
     def reset(self):
@@ -76,7 +77,9 @@ class SpaceDodgerGame:
         self.asteroids = []
         self.frame_count = 0
         self.spaceship_mask = self.spaceship_masks[0]
-        self.dodged_asteroids_count = 0
+        self.current_level = 1  # Reset to level 1
+        self.spawned_asteroids_count = 0
+        self.asteroid_speed = 1  # Reset the asteroid speed to the initial value
         return self.get_state()
 
     def update_spaceship_animation(self):
@@ -87,67 +90,73 @@ class SpaceDodgerGame:
             self.spaceship_mask = self.spaceship_masks[self.current_spaceship_index]
 
     def step(self, action):
+
+        move_penalty = -0.1
+        level_complete_reward = 50
+        collision_penalty = -5  # Penalty for collision
+        reward = 0
+        done = False
+
+        # Movement actions
         if action == 1 and self.spaceship.x > 0:
             self.spaceship.x -= min(self.spaceship_speed, self.spaceship.x)
+            reward += move_penalty
         elif action == 2 and self.spaceship.x < self.width - self.spaceship_width:
             self.spaceship.x += min(self.spaceship_speed, self.width - self.spaceship_width - self.spaceship.x)
+            reward += move_penalty
 
-        if self.frame_count % self.asteroid_spawn_rate == 0:
-            asteroid_size = random.randint(self.asteroid_min_size, self.asteroid_max_size)
-            edge_bias = random.random() < 0.2  # 20% chance to spawn near edges
-            if edge_bias:
-                # Choose left or right edge
-                asteroid_x = 0 if random.random() < 0.5 else self.width - asteroid_size
-            else:
-                asteroid_x = random.randint(0, self.width - asteroid_size)
-            asteroid_speed = random.randint(self.asteroid_min_speed, self.asteroid_max_speed)
-            asteroid_sprite = random.choice(self.asteroid_sprites)
-            scaled_sprite = pygame.transform.scale(asteroid_sprite, (asteroid_size, asteroid_size))
-            self.asteroids.append(
-                [scaled_sprite, pygame.Rect(asteroid_x, 0, asteroid_size, asteroid_size), asteroid_speed])
+        # Spawn a fixed number of asteroids per level
+        if self.spawned_asteroids_count < self.asteroids_per_level:
+            if self.frame_count % self.asteroid_spawn_rate == 0:
+                asteroid_x = random.randint(0, self.width - self.asteroid_size)
+                asteroid_sprite = random.choice(self.asteroid_sprites)
+                scaled_sprite = pygame.transform.scale(asteroid_sprite, (self.asteroid_size, self.asteroid_size))
+                self.asteroids.append(
+                    [scaled_sprite, pygame.Rect(asteroid_x, 0, self.asteroid_size, self.asteroid_size),
+                     self.asteroid_speed])
+                self.spawned_asteroids_count += 1
 
-        done = False
-        reward = 1  # Base reward for surviving the iteration
-
+        # Check collision and update dodged asteroids count
         for asteroid in self.asteroids:
-            prev_y = asteroid[1].y
-            asteroid[1].y += asteroid[2]
-            new_y = asteroid[1].y
+            asteroid_sprite, asteroid_rect, _ = asteroid
+            prev_y = asteroid_rect.y
+            asteroid_rect.y += self.asteroid_speed
+            new_y = asteroid_rect.y
 
-            asteroid_mask = pygame.mask.from_surface(asteroid[0])
-            offset_x = asteroid[1].x - self.spaceship.x
+            asteroid_mask = pygame.mask.from_surface(asteroid_sprite)
+            offset_x = asteroid_rect.x - self.spaceship.x
             offset_y = new_y - self.spaceship.y
 
             if self.spaceship_mask.overlap(asteroid_mask, (offset_x, offset_y)):
                 done = True
+                reward = collision_penalty
+                self.reset()
                 break
 
-            # Increment the dodged asteroids counter
-            if new_y > self.height and prev_y <= self.height:
-                self.dodged_asteroids_count += 1
-                # Adjust reward based on asteroid's speed and size
-                asteroid_speed_factor = asteroid[2] / self.asteroid_max_speed
-                asteroid_size_factor = (asteroid[1].width * asteroid[1].height) ** 0.5 / self.asteroid_max_size
-                reward += 0.5 + 0.25 * (asteroid_speed_factor + asteroid_size_factor)
+            if prev_y < self.height and new_y >= self.height:
+                # Reward for dodging when the asteroid just crosses the bottom of the screen
+                reward += self.dodge_reward
 
-        # Remove asteroids that have moved off the screen
+        # Remove asteroids that have gone off-screen
         self.asteroids = [asteroid for asteroid in self.asteroids if asteroid[1].y <= self.height]
 
-        if done:
-            reward = -5  # Negative reward for collision
-        else:
-            reward += 0.5 * self.dodged_asteroids_count  # Reward for dodging asteroids
+        # Check if all asteroids have been dodged or gone off-screen
+        if len(self.asteroids) == 0 and self.spawned_asteroids_count >= self.asteroids_per_level:
+            reward += level_complete_reward
+            self.prepare_next_level()
+            done = False
 
         self.frame_count += 1
 
-        # Punkte für langes Überleben
-
-        current_time = time.time()
-        if current_time - self.last_points_time >= 1:
-            self.points += 1
-            self.last_points_time = current_time
-
         return self.get_state(), reward, done
+
+    def prepare_next_level(self):
+        self.current_level += 1  # Increment the level
+        self.asteroids_per_level += 1  # Optionally increase the number of asteroids to spawn
+        self.spawned_asteroids_count = 0  # Reset the count of spawned asteroids for the new level
+        self.asteroid_speed += 0.5  # Increase the asteroid speed for the new level
+        self.asteroids = []  # Clear existing asteroids for the new level
+
     def get_state(self):
         pygame.display.flip()
         data = pygame.surfarray.array3d(self.screen)
@@ -164,5 +173,5 @@ class SpaceDodgerGame:
             self.screen.blit(asteroid[0], asteroid[1].topleft)
 
         font = pygame.font.Font(None, 36)
-        text = font.render(f"Points: {self.points}", True, (255, 255, 255))
-        self.screen.blit(text, (10, 10))
+        level_text = font.render(f"Level: {self.current_level}", True, (255, 255, 255))
+        self.screen.blit(level_text, (10, 10))
