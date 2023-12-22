@@ -9,7 +9,7 @@ class SpaceDodgerGame:
         pygame.init()
         mixer.init()
 
-        self.dodge_reward = 150
+        self.dodge_reward = 2
         self.asteroids_per_level = 1
         self.current_level = 1
         self.spawned_asteroids_count = 0
