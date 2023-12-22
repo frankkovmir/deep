@@ -9,6 +9,7 @@ class SpaceDodgerGame:
         pygame.init()
         mixer.init()
 
+        self.clock = pygame.time.Clock()
         self.dodge_reward = 2
         self.asteroids_per_level = 1
         self.current_level = 1
@@ -159,11 +160,17 @@ class SpaceDodgerGame:
 
     def get_state(self):
         pygame.display.flip()
-        data = pygame.surfarray.array3d(self.screen)
-        data = cv2.resize(cv2.cvtColor(data, cv2.COLOR_RGB2GRAY), (84, 84))
-        return data
+        state = [self.spaceship.x / self.width, self.spaceship.y / self.height]
+        if self.asteroids:
+            nearest_asteroid = min(self.asteroids, key=lambda a: a[1].y)
+            state.extend(
+                [nearest_asteroid[1].x / self.width, nearest_asteroid[1].y / self.height, self.asteroid_speed / 10])
+        else:
+            state.extend([0, 0, 0])  # No asteroid
+        state.append(self.current_level / 10)  # Normalized level
+        return state
 
-    def render(self):
+    def render(self,action):
         self.screen.fill((0, 0, 0))
 
         current_spaceship = self.spaceships[self.current_spaceship_index]
@@ -174,4 +181,7 @@ class SpaceDodgerGame:
 
         font = pygame.font.Font(None, 36)
         level_text = font.render(f"Level: {self.current_level}", True, (255, 255, 255))
+        action_text = font.render(f"Action: {action}", True, (255, 255, 255))
+        self.screen.blit(action_text, (10, 50))
+        self.clock.tick(60)
         self.screen.blit(level_text, (10, 10))
