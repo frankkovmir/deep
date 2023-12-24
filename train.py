@@ -92,9 +92,6 @@ def train(opt):
             # print(f"State Tensor: {state_tensor}")
             #print(f"Stored in replay memory: State: {next_state}, Action: {action}, Reward: {reward}, Done: {done}")
 
-            if len(replay_memory) > opt.replay_memory_size:
-                del replay_memory[0]
-
             if len(replay_memory) >= opt.batch_size:
                 batch = sample(replay_memory, opt.batch_size)
                 state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = zip(*batch)
@@ -104,41 +101,63 @@ def train(opt):
                 action_batch = torch.tensor(action_batch, dtype=torch.long).to(device)
                 reward_batch = torch.tensor(reward_batch, dtype=torch.float).to(device)
                 terminal_batch = torch.tensor(terminal_batch, dtype=torch.float).to(device)
-
-                current_q_values = model(state_batch).squeeze(1)
                 action_indices = action_batch.unsqueeze(-1)
-                next_q_values = target_model(next_state_batch).squeeze(1)
-                #print(f"Shape of next_q_values: {next_q_values.shape}")
-                #print(f"Shape of action_indices: {action_indices.shape}")
-                max_next_q_values = next_q_values.max(1)[0]
-                reward_batch = reward_batch.unsqueeze(1)
-                terminal_batch = terminal_batch.unsqueeze(1)
-                #print(f'current_q_values: {current_q_values}')
-                #print(f"Shape of next_q_values: {next_q_values.shape}")
-                #print(f'next_q_values: {next_q_values}')
-                #print(f'max_next_q_values: {max_next_q_values}')
-                #print(f'reward_batch: {reward_batch}')
-                #print(f'terminal_batch: {terminal_batch}')
-                max_next_q_values = max_next_q_values.unsqueeze(1)
-                expected_q_values = reward_batch + (opt.gamma * max_next_q_values * (1 - terminal_batch))
 
+                # Debug prints for tensor shapes
+                # print(f'Shape of state_batch: {state_batch.shape}')
+                # print(f'Shape of next_state_batch: {next_state_batch.shape}')
+                # print(f'Shape of action_batch: {action_batch.shape}')
+                # print(f'Shape of reward_batch: {reward_batch.shape}')
+                # print(f'Shape of terminal_batch: {terminal_batch.shape}')
+                # print(f'Shape of action_indices: {action_indices.shape}')
 
-                # Reshape action_batch to use as index
-
-                #print(f'action_indices: {action_indices}')
-
+                # Get current Q values for current state-action pairs
+                current_q_values = model(state_batch).squeeze(1)
                 current_q_actions = current_q_values.gather(1, action_indices)
-                #print(f'current_q_actions: {current_q_actions}')
 
-                # print(f'max_next_q_values shape: {max_next_q_values.shape}')
-                # print(f'expected_q_values shape: {expected_q_values.shape}')
-                # print(f'current_q_actions shape: {current_q_actions.shape}')
+                # Debug prints for Q values
+                #print(f'Shape of current_q_values: {current_q_values.shape}')
+                #print(f'Shape of current_q_actions: {current_q_actions.shape}')
+
+                with torch.no_grad():
+                    # Model output for next states
+                    model_output_next = model(next_state_batch).squeeze(1)  # Squeeze out the middle dimension
+                    #print(f'Shape of model_output_next after squeeze: {model_output_next.shape}')
+
+                    # Select the action with the highest Q-value
+                    next_actions = model_output_next.max(1)[1]
+                    #print(f'Shape of next_actions before unsqueeze: {next_actions.shape}')
+
+                    # Reshape next_actions to use in gather
+                    next_actions = next_actions.unsqueeze(-1)
+                    #print(f'Shape of next_actions after unsqueeze: {next_actions.shape}')
+
+                    # Get next Q values from target network
+                    next_q_values = target_model(next_state_batch).squeeze(1)  # Squeeze out the middle dimension
+                    next_q_values = next_q_values.gather(1, next_actions)
+                    #print(f'Shape of next_q_values after gather: {next_q_values.shape}')
+
+                    # Squeeze next_q_values to remove the last dimension
+                    next_q_values = next_q_values.squeeze(-1)
+                    #print(f'Shape of next_q_values after squeeze: {next_q_values.shape}')
+
+                    # Ensure terminal_batch is a 1D tensor [batch_size]
+                    terminal_batch = terminal_batch.squeeze(-1)
+
+                    # Compute the target Q values
+                    target_q_values = reward_batch + (opt.gamma * next_q_values * (1 - terminal_batch))
+                    target_q_values = target_q_values.unsqueeze(1)  # Reshape to [180, 1]
+
+                    # print(f'current_q_actions {current_q_actions.shape}')
+                    # print(f'target_q_values {target_q_values.shape}')
+
                 # Calculate loss
-                loss = criterion(current_q_actions, expected_q_values)
-                #print(f"Training Loss: {loss.item()}")
+                loss = criterion(current_q_actions, target_q_values)
+
+                # Gradient descent
                 optimizer.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)  # Gradient clipping
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
                 optimizer.step()
 
                 if episode % opt.target_update == 0:
