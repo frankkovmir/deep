@@ -65,6 +65,7 @@ def train(opt):
         print(f"Resuming training from episode {start_episode}")
 
     for episode in range(start_episode, opt.num_episodes):
+        # TODO: state_tensor und next_state_tensor mal checken wegen dimension
         env = SpaceDodgerGame()
         state = env.get_state()
         state_tensor = torch.tensor([state], dtype=torch.float).to(device)
