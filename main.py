@@ -1,7 +1,5 @@
 import pygame
 import random
-import cv2
-import time
 from pygame import mixer
 
 class SpaceDodgerGame:
@@ -10,7 +8,7 @@ class SpaceDodgerGame:
         mixer.init()
 
         self.clock = pygame.time.Clock()
-        self.dodge_reward = 2
+        self.dodge_reward = 0.1
         self.asteroids_per_level = 1
         self.current_level = 1
         self.spawned_asteroids_count = 0
@@ -21,8 +19,8 @@ class SpaceDodgerGame:
         # Load asteroid sprite sheet
         asteroid_sheet = pygame.image.load('assets/asteroids.png')
         asteroid_sprite_width, asteroid_sprite_height = asteroid_sheet.get_size()
-        asteroid_sprite_width //= 8  # Assuming 8 sprites in a row
-        asteroid_sprite_height //= 8  # Assuming 8 rows
+        asteroid_sprite_width //= 8
+        asteroid_sprite_height //= 8
 
         # Extract individual asteroid sprites
         self.asteroid_sprites = []
@@ -92,19 +90,18 @@ class SpaceDodgerGame:
 
     def step(self, action):
 
-        move_penalty = -0.1
-        level_complete_reward = 50
-        collision_penalty = -5  # Penalty for collision
+        level_complete_reward = 1
+        collision_penalty = -1
         reward = 0
         done = False
 
         # Movement actions
         if action == 1 and self.spaceship.x > 0:
             self.spaceship.x -= min(self.spaceship_speed, self.spaceship.x)
-            reward += move_penalty
         elif action == 2 and self.spaceship.x < self.width - self.spaceship_width:
             self.spaceship.x += min(self.spaceship_speed, self.width - self.spaceship_width - self.spaceship.x)
-            reward += move_penalty
+        elif action == 0 and self.spaceship.x < self.width - self.spaceship_width:
+            pass
 
         # Spawn a fixed number of asteroids per level
         if self.spawned_asteroids_count < self.asteroids_per_level:
@@ -140,6 +137,7 @@ class SpaceDodgerGame:
 
         # Remove asteroids that have gone off-screen
         self.asteroids = [asteroid for asteroid in self.asteroids if asteroid[1].y <= self.height]
+        #print("Asteroids remaining after removal:", len(self.asteroids))
 
         # Check if all asteroids have been dodged or gone off-screen
         if len(self.asteroids) == 0 and self.spawned_asteroids_count >= self.asteroids_per_level:
@@ -148,26 +146,58 @@ class SpaceDodgerGame:
             done = False
 
         self.frame_count += 1
+        #print("Total Reward This Step:", reward)
 
         return self.get_state(), reward, done
 
     def prepare_next_level(self):
-        self.current_level += 1  # Increment the level
-        self.asteroids_per_level += 1  # Optionally increase the number of asteroids to spawn
-        self.spawned_asteroids_count = 0  # Reset the count of spawned asteroids for the new level
-        self.asteroid_speed += 0.5  # Increase the asteroid speed for the new level
-        self.asteroids = []  # Clear existing asteroids for the new level
+        self.current_level += 1
+        self.asteroids_per_level += 1
+        self.spawned_asteroids_count = 0
+        self.asteroid_speed += 0.5
+        self.asteroids = []
+        print(f"Moving to Level: {self.current_level}, Asteroids This Level: {self.asteroids_per_level}")
 
     def get_state(self):
+        """folde inputs werden übergeben
+        1 Spaceship X position (normalized)
+        2 Spaceship Y position (normalized)
+        3 Nearest asteroid X position (normalized)
+        4 Nearest asteroid Y position (normalized)
+        5 Asteroid speed (normalized)
+        6 Distance to left edge (normalized)
+        7 Distance to right edge (normalized)
+        8 Horizontal distance to nearest asteroid (normalized)
+        9 Vertical distance to nearest asteroid (normalized)
+        10 Current level (normalized)"""
+
         pygame.display.flip()
-        state = [self.spaceship.x / self.width, self.spaceship.y / self.height]
+        state = [
+            self.spaceship.x / self.width,
+            self.spaceship.y / self.height
+        ]
+
+        # Distances to the screen edges
+        distance_to_left_edge = self.spaceship.x / self.width
+        distance_to_right_edge = (self.width - (self.spaceship.x + self.spaceship_width)) / self.width
+        state.extend([distance_to_left_edge, distance_to_right_edge])
+
+        # Information about the nearest asteroid
         if self.asteroids:
             nearest_asteroid = min(self.asteroids, key=lambda a: a[1].y)
-            state.extend(
-                [nearest_asteroid[1].x / self.width, nearest_asteroid[1].y / self.height, self.asteroid_speed / 10])
+            asteroid_x = nearest_asteroid[1].x / self.width
+            asteroid_y = nearest_asteroid[1].y / self.height
+            state.extend([asteroid_x, asteroid_y, self.asteroid_speed / 10])
+            # Horizontal and vertical distances to the nearest asteroid
+            horizontal_distance = (nearest_asteroid[1].x - self.spaceship.x) / self.width
+            vertical_distance = (nearest_asteroid[1].y - self.spaceship.y) / self.height
+            state.extend([horizontal_distance, vertical_distance])
         else:
-            state.extend([0, 0, 0])  # No asteroid
-        state.append(self.current_level / 10)  # Normalized level
+            state.extend([0, 0, 0, 0, 0])
+
+        # Level information
+        state.append(self.current_level / 10)
+
         return state
 
     def render(self,action):

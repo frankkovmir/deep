@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch.nn.functional as F
 
 class DeepQNetwork(nn.Module):
     def __init__(self, input_size, output_size):
@@ -11,6 +12,6 @@ class DeepQNetwork(nn.Module):
         self.fc3 = nn.Linear(256, output_size)
 
     def forward(self, x):
-        x = self.relu1(self.fc1(x))
-        x = self.relu2(self.fc2(x))
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
         return self.fc3(x)
