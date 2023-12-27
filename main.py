@@ -88,10 +88,23 @@ class SpaceDodgerGame:
             self.current_spaceship_index = (self.current_spaceship_index + 1) % len(self.spaceships)
             self.spaceship_mask = self.spaceship_masks[self.current_spaceship_index]
 
-    def step(self, action):
+    def spawn_asteroid_chain(self):
+        hole_position = random.randint(self.asteroid_size * 2, self.width - self.asteroid_size * 3)
+        hole_size = random.randint(self.asteroid_size * 2, self.asteroid_size * 3)
 
+        for x in range(0, self.width, self.asteroid_size):
+            if not (hole_position < x < hole_position + hole_size):
+                asteroid_sprite = random.choice(self.asteroid_sprites)
+                scaled_sprite = pygame.transform.scale(asteroid_sprite, (self.asteroid_size, self.asteroid_size))
+                self.asteroids.append(
+                    [scaled_sprite, pygame.Rect(x, 0, self.asteroid_size, self.asteroid_size),
+                     self.asteroid_speed])
+
+    def step(self, action):
         level_complete_reward = 1
         collision_penalty = -1
+        successful_hole_navigation_reward = 0.5  # Reward for successfully navigating through the hole
+        standard_dodge_reward = 0.1  # Standard reward for dodging an asteroid
         reward = 0
         done = False
 
@@ -100,19 +113,23 @@ class SpaceDodgerGame:
             self.spaceship.x -= min(self.spaceship_speed, self.spaceship.x)
         elif action == 2 and self.spaceship.x < self.width - self.spaceship_width:
             self.spaceship.x += min(self.spaceship_speed, self.width - self.spaceship_width - self.spaceship.x)
-        elif action == 0 and self.spaceship.x < self.width - self.spaceship_width:
+        elif action == 0:
             pass
 
-        # Spawn a fixed number of asteroids per level
+        # Spawn a chain of asteroids with a hole
         if self.spawned_asteroids_count < self.asteroids_per_level:
             if self.frame_count % self.asteroid_spawn_rate == 0:
-                asteroid_x = random.randint(0, self.width - self.asteroid_size)
-                asteroid_sprite = random.choice(self.asteroid_sprites)
-                scaled_sprite = pygame.transform.scale(asteroid_sprite, (self.asteroid_size, self.asteroid_size))
-                self.asteroids.append(
-                    [scaled_sprite, pygame.Rect(asteroid_x, 0, self.asteroid_size, self.asteroid_size),
-                     self.asteroid_speed])
+                self.spawn_asteroid_chain()
                 self.spawned_asteroids_count += 1
+
+        # Calculate the hole's position and size
+        if self.asteroids:
+            all_x_positions = [asteroid[1].x for asteroid in self.asteroids]
+            hole_start = max(0, min(all_x_positions) - self.asteroid_size)
+            hole_end = min(self.width, max(all_x_positions) + self.asteroid_size)
+        else:
+            hole_start = 0
+            hole_end = self.width
 
         # Check collision and update dodged asteroids count
         for asteroid in self.asteroids:
@@ -132,12 +149,13 @@ class SpaceDodgerGame:
                 break
 
             if prev_y < self.height and new_y >= self.height:
-                # Reward for dodging when the asteroid just crosses the bottom of the screen
-                reward += self.dodge_reward
+                if hole_start <= self.spaceship.x <= hole_end:
+                    reward += successful_hole_navigation_reward  # Reward for navigating through the hole
+                else:
+                    reward += standard_dodge_reward  # Standard reward for dodging
 
         # Remove asteroids that have gone off-screen
         self.asteroids = [asteroid for asteroid in self.asteroids if asteroid[1].y <= self.height]
-        #print("Asteroids remaining after removal:", len(self.asteroids))
 
         # Check if all asteroids have been dodged or gone off-screen
         if len(self.asteroids) == 0 and self.spawned_asteroids_count >= self.asteroids_per_level:
@@ -146,10 +164,8 @@ class SpaceDodgerGame:
             done = False
 
         self.frame_count += 1
-        #print("Total Reward This Step:", reward)
 
         return self.get_state(), reward, done
-
     def prepare_next_level(self):
         self.current_level += 1
         self.asteroids_per_level += 1
@@ -173,30 +189,25 @@ class SpaceDodgerGame:
 
         pygame.display.flip()
         state = [
-            self.spaceship.x / self.width,
-            self.spaceship.y / self.height
+            self.spaceship.x / self.width,  # 1. Spaceship X position
+            self.spaceship.y / self.height,  # 2. Spaceship Y position
+            self.spaceship.x / self.width,  # 3. Distance to left edge
+            (self.width - (self.spaceship.x + self.spaceship_width)) / self.width,  # 4. Distance to right edge
+            self.asteroid_speed / 10  # 5. Asteroid speed
         ]
 
-        # Distances to the screen edges
-        distance_to_left_edge = self.spaceship.x / self.width
-        distance_to_right_edge = (self.width - (self.spaceship.x + self.spaceship_width)) / self.width
-        state.extend([distance_to_left_edge, distance_to_right_edge])
-
-        # Information about the nearest asteroid
+        # Calculate hole's position and size
         if self.asteroids:
-            nearest_asteroid = min(self.asteroids, key=lambda a: a[1].y)
-            asteroid_x = nearest_asteroid[1].x / self.width
-            asteroid_y = nearest_asteroid[1].y / self.height
-            state.extend([asteroid_x, asteroid_y, self.asteroid_speed / 10])
-            # Horizontal and vertical distances to the nearest asteroid
-            horizontal_distance = (nearest_asteroid[1].x - self.spaceship.x) / self.width
-            vertical_distance = (nearest_asteroid[1].y - self.spaceship.y) / self.height
-            state.extend([horizontal_distance, vertical_distance])
+            all_x_positions = [asteroid[1].x for asteroid in self.asteroids]
+            hole_start = max(0, min(all_x_positions) - self.asteroid_size)
+            hole_end = min(self.width, max(all_x_positions) + self.asteroid_size)
+            hole_position = (hole_start + hole_end) / 2
+            hole_size = hole_end - hole_start
         else:
-            state.extend([0, 0, 0, 0, 0])
+            hole_position = self.width / 2
+            hole_size = self.width
 
-        # Level information
-        state.append(self.current_level / 10)
+        state.extend([hole_position / self.width, hole_size / self.width])  # Hole position and size
 
         return state
 

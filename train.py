@@ -40,7 +40,7 @@ def train(opt):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    input_size = 10
+    input_size = 7
     output_size = 3
     model = DeepQNetwork(input_size, output_size).to(device)
     target_model = DeepQNetwork(input_size, output_size).to(device)

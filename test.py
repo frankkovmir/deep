@@ -13,7 +13,7 @@ def get_args():
     return args
 
 def test(opt):
-    input_size = 10
+    input_size = 7
     output_size = 3
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
