@@ -12,8 +12,8 @@ def get_args():
     return args
 
 def test(opt):
-    input_size = 4
-    output_size = 3
+    input_size = 5
+    output_size = 2
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = DeepQNetwork(input_size, output_size).to(device)

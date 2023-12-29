@@ -93,18 +93,44 @@ class SpaceDodgerGame:
             self.spaceship_mask = self.spaceship_masks[self.current_spaceship_index]
 
     def spawn_asteroid_chain(self):
-        hole_position = random.randint(self.asteroid_size * 2, self.width - self.asteroid_size * 3)
+        # Define the range where the hole can be spawned to avoid the spaceship's starting position.
+        min_x = 0
+        max_x = self.width - self.asteroid_size * 3
+
+        # Determine the spaceship's current position
+        spaceship_x_center = self.spaceship.x + self.spaceship_width // 2
+
+        # Define the range around the spaceship where the hole should not be generated
+        exclusion_zone = self.spaceship_width * 2
+
+        # Split the possible hole positions into two ranges to avoid the exclusion zone
+        left_range = [x for x in range(min_x, spaceship_x_center - exclusion_zone) if
+                      x + self.asteroid_size * 3 <= max_x]
+        right_range = [x for x in range(spaceship_x_center + exclusion_zone, max_x) if x >= min_x]
+
+        # Check if there are valid positions in the ranges
+        if not left_range and not right_range:
+            print("No valid positions for the hole. Adjust game parameters.")
+            return
+
+        # Randomly select whether the hole will be to the left or right of the exclusion zone
+        if left_range and (not right_range or random.random() > 0.5):
+            hole_position = random.choice(left_range)
+        else:
+            hole_position = random.choice(right_range)
+
+        # Determine the size of the hole
         hole_size = random.randint(self.asteroid_size * 2, self.asteroid_size * 3)
 
+        # Spawn the asteroids, leaving a hole at the chosen position
         for x in range(0, self.width, self.asteroid_size):
-            if not (hole_position < x < hole_position + hole_size):
+            if not hole_position <= x < hole_position + hole_size:
                 asteroid_sprite = random.choice(self.asteroid_sprites)
                 scaled_sprite = pygame.transform.scale(asteroid_sprite, (self.asteroid_size, self.asteroid_size))
                 self.asteroids.append(
-                    [scaled_sprite, pygame.Rect(x, 0, self.asteroid_size, self.asteroid_size),
-                     self.asteroid_speed])
+                    [scaled_sprite, pygame.Rect(x, 0, self.asteroid_size, self.asteroid_size), self.asteroid_speed])
 
-        # Store the hole position and size
+        # Update the hole position and size attributes
         self.hole_position = hole_position
         self.hole_size = hole_size
 
