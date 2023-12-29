@@ -1,7 +1,6 @@
 import argparse
 import torch
 from main import SpaceDodgerGame
-import numpy as np
 import pygame
 from model import DeepQNetwork
 import os
@@ -13,7 +12,7 @@ def get_args():
     return args
 
 def test(opt):
-    input_size = 7
+    input_size = 4
     output_size = 3
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -23,6 +22,7 @@ def test(opt):
     if os.path.exists(model_path):
         model_state = torch.load(model_path, map_location=device)
         model.load_state_dict(model_state)
+        print("Model weights loaded successfully")  # This line is added for debugging
     else:
         print("No saved model found. Please check the path.")
         return
@@ -36,7 +36,9 @@ def test(opt):
 
         with torch.no_grad():
             prediction = model(state_tensor)
+            print("Q-values:", prediction)  # This line is added for debugging
         action = torch.argmax(prediction).item()
+        print("Selected action:", action)  # This line is added for debugging
 
         next_state, _, done = game.step(action)
 
@@ -44,6 +46,12 @@ def test(opt):
 
         pygame.display.flip()
         game.render(action)
+        print("Game state:", state)  # This line is added for debugging
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
 
         if done:
             break

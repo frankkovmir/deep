@@ -1,3 +1,8 @@
+"""
+author: Frank Kovmir
+frankkovmir@gmail.com
+"""
+
 import pygame
 import random
 

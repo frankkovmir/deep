@@ -1,47 +1,159 @@
+"""
+author: Frank Kovmir
+frankkovmir@gmail.com
+"""
+
 import argparse
+import math
 import os
-import shutil
-from random import randint, sample
-import numpy as np
 import torch
+import random
 import torch.nn as nn
-from tensorboardX import SummaryWriter
 from model import DeepQNetwork
 from main import SpaceDodgerGame
 from torch.optim import Adam
-from collections import deque
+from collections import namedtuple, deque
+from itertools import count
+import matplotlib
+import matplotlib.pyplot as plt
+from tensorboardX import SummaryWriter
+
+# set up matplotlib
+is_ipython = 'inline' in matplotlib.get_backend()
+if is_ipython:
+    from IPython import display
+
+plt.ion()
+
+steps_done = 0
+Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
+
+
+class ReplayMemory(object):
+    def __init__(self, capacity):
+        self.memory = deque([], maxlen=capacity)
+
+    def push(self, *args):
+        self.memory.append(Transition(*args))
+
+    def sample(self, batch_size):
+        return random.sample(self.memory, batch_size)
+
+    def __len__(self):
+        return len(self.memory)
+
+
+def save_checkpoint(model, optimizer, episode, memory, path, steps_done):
+    checkpoint = {
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'episode': episode,
+        'replay_memory': list(memory.memory),
+        'steps_done': steps_done
+    }
+    torch.save(checkpoint, path)
+
 
 def get_args():
-    parser = argparse.ArgumentParser("""Implementation of Deep Q Network for SpaceDodger Game""")
-    parser.add_argument("--batch_size", type=int, default=180, help="The number of images per batch")
-    parser.add_argument("--learning_rate", type=float, default=1e-3)
+    parser = argparse.ArgumentParser("""Deep Q Network for SpaceDodger Game""")
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--gamma", type=float, default=0.99)
-    parser.add_argument("--epsilon_start", type=float, default=1.0)
-    parser.add_argument("--epsilon_end", type=float, default=0.01)
-    parser.add_argument("--num_episodes", type=int, default=5000)
-    parser.add_argument("--replay_memory_size", type=int, default=10000)
+    parser.add_argument("--epsilon_start", type=float, default=0.9)
+    parser.add_argument("--epsilon_end", type=float, default=0.05)
+    parser.add_argument("--epsilon_decay", type=int, default=1000000)
+    parser.add_argument("--num_episodes", type=int, default=300)
+    parser.add_argument("--replay_memory_size", type=int, default=100000)
     parser.add_argument("--log_path", type=str, default="tensorboard")
     parser.add_argument("--saved_path", type=str, default="trained_models")
-    parser.add_argument("--target_update", type=int, default=10, help="Number of episodes to update the target network")
+    parser.add_argument("--target_update", type=int, default=10)
+    parser.add_argument("--tau", type=float, default=0.010)
     args = parser.parse_args()
     return args
 
 
-def train(opt):
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(123)
+def select_action(state, model, opt, device):
+    global steps_done
+    sample = random.random()
+    eps_threshold = opt.epsilon_end + (opt.epsilon_start - opt.epsilon_end) * \
+                    math.exp(-1. * steps_done / opt.epsilon_decay)
+    steps_done += 1
+    if sample > eps_threshold:
+        with torch.no_grad():
+            return model(state).max(1).indices.view(1, 1)
     else:
-        torch.manual_seed(123)
+        return torch.tensor([[random.randrange(2)]], device=device, dtype=torch.long)
 
-    if os.path.isdir(opt.log_path):
-        shutil.rmtree(opt.log_path)
-    os.makedirs(opt.log_path)
-    writer = SummaryWriter(opt.log_path)
 
+episode_durations = []
+
+
+# genommen von https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
+def plot_durations(show_result=False):
+    plt.figure(1)
+    durations_t = torch.tensor(episode_durations, dtype=torch.float)
+    if show_result:
+        plt.title('Result')
+    else:
+        plt.clf()
+        plt.title('Training...')
+    plt.xlabel('Episode')
+    plt.ylabel('Duration')
+    plt.plot(durations_t.numpy())
+    # Take 100 episode averages and plot them too
+    if len(durations_t) >= 100:
+        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
+        means = torch.cat((torch.zeros(99), means))
+        plt.plot(means.numpy())
+
+    plt.pause(0.001)  # pause a bit so that plots are updated
+    if is_ipython:
+        if not show_result:
+            display.display(plt.gcf())
+            display.clear_output(wait=True)
+
+        else:
+            display.display(plt.gcf())
+    else:
+        plt.show(block=False)
+
+
+def optimize_model(opt, memory, model, target_model, optimizer, criterion, device):
+    if len(memory) < opt.batch_size:
+        return
+    transitions = memory.sample(opt.batch_size)
+    batch = Transition(*zip(*transitions))
+
+    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+                                            batch.next_state)), device=device, dtype=torch.bool)
+    non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
+    state_batch = torch.cat(batch.state)
+    action_batch = torch.cat(batch.action)
+    reward_batch = torch.cat(batch.reward)
+
+    state_action_values = model(state_batch).gather(1, action_batch)
+    next_state_values = torch.zeros(opt.batch_size, device=device)
+    with torch.no_grad():
+        next_state_values[non_final_mask] = target_model(non_final_next_states).max(1).values
+    expected_state_action_values = (next_state_values * opt.gamma) + reward_batch
+
+    loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+
+    optimizer.zero_grad()
+    loss.backward()
+
+    torch.nn.utils.clip_grad_value_(model.parameters(), 100)
+    optimizer.step()
+
+    return loss.item()
+
+
+def train(opt):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    input_size = 5
+    output_size = 2
 
-    input_size = 7
-    output_size = 3
+    writer = SummaryWriter(log_dir=opt.log_path)
     model = DeepQNetwork(input_size, output_size).to(device)
     target_model = DeepQNetwork(input_size, output_size).to(device)
     target_model.load_state_dict(model.state_dict())
@@ -49,153 +161,96 @@ def train(opt):
 
     optimizer = Adam(model.parameters(), lr=opt.learning_rate, weight_decay=1e-5)
     criterion = nn.MSELoss()
-    global_step = 0
+    memory = ReplayMemory(opt.replay_memory_size)
     start_episode = 0
-    replay_memory = deque(maxlen=opt.replay_memory_size)
-    epsilon_decay_rate = (opt.epsilon_start - opt.epsilon_end) / opt.num_episodes
 
-
-    checkpoint_path = f"{opt.saved_path}/space_dodger_checkpoint.pth"
+    checkpoint_path = f"{opt.saved_path}/space_dodger_checkpoint.pth"  # zahl noch dahinter
     if os.path.exists(checkpoint_path):
         checkpoint = torch.load(checkpoint_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_episode = checkpoint['episode']
-        replay_memory = checkpoint.get('replay_memory', [])
-        print(f"Resuming training from episode {start_episode}")
+        global steps_done
+        steps_done = checkpoint.get('steps_done', 0)
+        loaded_memory = checkpoint.get('replay_memory', [])
+        for item in loaded_memory:
+            memory.push(*item)
+
+    log_interval = 100
 
     for episode in range(start_episode, opt.num_episodes):
-        # TODO: state_tensor und next_state_tensor mal checken wegen dimension
         env = SpaceDodgerGame()
         state = env.get_state()
         state_tensor = torch.tensor([state], dtype=torch.float).to(device)
-        episode_rewards = 0
-        done = False
-        iter_count = 0
 
-        while not done:
-            epsilon = max(opt.epsilon_end, opt.epsilon_start - epsilon_decay_rate * episode)
-            q_values = model(state_tensor)
-            action = randint(0, output_size - 1) if np.random.rand() <= epsilon else torch.argmax(q_values).item()
+        total_loss = 0.0
+        total_reward = 0.0
 
-            next_state, reward, done = env.step(action)
-            next_state_tensor = torch.tensor([next_state], dtype=torch.float).to(device)
-            replay_memory.append((state_tensor, action, reward, next_state_tensor, done))
+        for t in count():
+            action = select_action(state_tensor, model, opt, device)
+            next_state, reward, done = env.step(action.item())
+            next_state_tensor = None if done else torch.tensor([next_state], dtype=torch.float).to(device)
+            reward_tensor = torch.tensor([reward], dtype=torch.float).to(device)
+
+            memory.push(state_tensor, action, next_state_tensor, reward_tensor)
             state_tensor = next_state_tensor
-            episode_rewards += reward
 
-            # state prints
-            # spaceship_pos = next_state[0:2]
-            # asteroids_info = next_state[2:4]
-            # print(f"Spaceship Position: {spaceship_pos}")
-            # print(f"Asteroids: {asteroids_info}")
-            # print(f"Reward: {reward}, Done: {done}")
-            # print(f"State Tensor: {state_tensor}")
-            #print(f"Stored in replay memory: State: {next_state}, Action: {action}, Reward: {reward}, Done: {done}")
+            # Optimize model
+            loss = optimize_model(opt, memory, model, target_model, optimizer, criterion, device)
 
-            if len(replay_memory) >= opt.batch_size:
-                batch = sample(replay_memory, opt.batch_size)
-                state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = zip(*batch)
+            if loss is not None:
+                total_loss += loss
 
-                state_batch = torch.stack(state_batch).to(device)
-                next_state_batch = torch.stack(next_state_batch).to(device)
-                action_batch = torch.tensor(action_batch, dtype=torch.long).to(device)
-                reward_batch = torch.tensor(reward_batch, dtype=torch.float).to(device)
-                terminal_batch = torch.tensor(terminal_batch, dtype=torch.float).to(device)
-                action_indices = action_batch.unsqueeze(-1)
+            total_reward += reward
 
-                # Debug prints for tensor shapes
-                # print(f'Shape of state_batch: {state_batch.shape}')
-                # print(f'Shape of next_state_batch: {next_state_batch.shape}')
-                # print(f'Shape of action_batch: {action_batch.shape}')
-                # print(f'Shape of reward_batch: {reward_batch.shape}')
-                # print(f'Shape of terminal_batch: {terminal_batch.shape}')
-                # print(f'Shape of action_indices: {action_indices.shape}')
+            # Update target network
+            target_net_state_dict = target_model.state_dict()
+            policy_net_state_dict = model.state_dict()
+            for key in policy_net_state_dict:
+                target_net_state_dict[key] = policy_net_state_dict[key] * opt.tau + target_net_state_dict[key] * (
+                            1 - opt.tau)
+            target_model.load_state_dict(target_net_state_dict)
 
-                # Get current Q values for current state-action pairs
-                current_q_values = model(state_batch).squeeze(1)
-                current_q_actions = current_q_values.gather(1, action_indices)
+            if done:
+                episode_durations.append(t + 1)
+                plot_durations()
+                break
 
-                # Debug prints for Q values
-                #print(f'Shape of current_q_values: {current_q_values.shape}')
-                #print(f'Shape of current_q_actions: {current_q_actions.shape}')
-
-                with torch.no_grad():
-                    # Model output for next states
-                    model_output_next = model(next_state_batch).squeeze(1)  # Squeeze out the middle dimension
-                    #print(f'Shape of model_output_next after squeeze: {model_output_next.shape}')
-
-                    # Select the action with the highest Q-value
-                    next_actions = model_output_next.max(1)[1]
-                    #print(f'Shape of next_actions before unsqueeze: {next_actions.shape}')
-
-                    # Reshape next_actions to use in gather
-                    next_actions = next_actions.unsqueeze(-1)
-                    #print(f'Shape of next_actions after unsqueeze: {next_actions.shape}')
-
-                    # Get next Q values from target network
-                    next_q_values = target_model(next_state_batch).squeeze(1)  # Squeeze out the middle dimension
-                    next_q_values = next_q_values.gather(1, next_actions)
-                    #print(f'Shape of next_q_values after gather: {next_q_values.shape}')
-
-                    # Squeeze next_q_values to remove the last dimension
-                    next_q_values = next_q_values.squeeze(-1)
-                    #print(f'Shape of next_q_values after squeeze: {next_q_values.shape}')
-
-                    # Ensure terminal_batch is a 1D tensor [batch_size]
-                    terminal_batch = terminal_batch.squeeze(-1)
-
-                    # Compute the target Q values
-                    target_q_values = reward_batch + (opt.gamma * next_q_values * (1 - terminal_batch))
-                    target_q_values = target_q_values.unsqueeze(1)  # Reshape to [180, 1]
-
-                    # print(f'current_q_actions {current_q_actions.shape}')
-                    # print(f'target_q_values {target_q_values.shape}')
-
-                # Calculate loss
-                loss = criterion(current_q_actions, target_q_values)
-
-                # Gradient descent
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
-                optimizer.step()
-
-                if episode % opt.target_update == 0:
-                    target_model.load_state_dict(model.state_dict())
-
-                # TensorBoard logging
-                writer.add_scalar('Training/Loss', loss.item(), global_step)
-                writer.add_scalar('Q-Values/Average', q_values.mean().item(), global_step)
-                writer.add_histogram('Q-Values/Distribution', q_values.detach().cpu().numpy(), global_step)
-                writer.add_histogram('Actions/Distribution', action_batch.detach().cpu().numpy(), global_step)
-                writer.add_scalar('Performance/Total Reward', episode_rewards, episode)
-                writer.add_scalar('Performance/Epsilon', epsilon, episode)
-                for name, param in model.named_parameters():
-                    writer.add_histogram(f'Weights/{name}', param, global_step)
-                    if param.grad is not None:
-                        writer.add_histogram(f'Gradients/{name}', param.grad, global_step)
-
+            eps_rate = opt.epsilon_end + (opt.epsilon_start - opt.epsilon_end) * math.exp(
+                -1. * steps_done / opt.epsilon_decay)
 
             env.render(action=action)
             env.update_spaceship_animation()
-            # Print training progress
-            print("Episode: {}/{}, Iteration: {}, Level: {}, Reward: {}, Epsilon: {:.4f}".format(
-                episode + 1, opt.num_episodes, iter_count, env.current_level, reward, epsilon))
-            global_step += 1
-            iter_count += 1
+            print(
+                f"Episode: {episode + 1}/{opt.num_episodes}, Iteration: {steps_done}, Level: {env.current_level}, Epsilon: {eps_rate:.4f}")
 
+        # Log scalar values every episode
+        average_loss = total_loss / (t + 1)
+        writer.add_scalar('Episode_duration', t + 1, episode)
+        writer.add_scalar('Epsilon_rate', eps_rate, episode)
+        writer.add_scalar('Average_loss', average_loss, episode)
+        writer.add_scalar('Total_reward', total_reward, episode)
+
+        # Log histograms less frequently
+        if episode % log_interval == 0:
+            for name, param in model.named_parameters():
+                writer.add_histogram(f'Episode_{episode}/{name}_grad', param.grad, episode)
+                writer.add_histogram(f'Episode_{episode}/{name}_weight', param, episode)
+
+        # Save checkpoint
         if episode % 100 == 0 and episode != 0:
-            checkpoint = {
-                'episode': episode,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'replay_memory': replay_memory
-            }
-            torch.save(checkpoint, checkpoint_path)
+            save_checkpoint_path = f"{opt.saved_path}/space_dodger_checkpoint_{episode}.pth"
+            save_checkpoint(model, optimizer, episode, memory, save_checkpoint_path, steps_done)
+
+
 
     torch.save(model.state_dict(), f"{opt.saved_path}/space_dodger_final.pth")
+
     writer.close()
+    print('Complete')
+    plot_durations(show_result=True)
+    plt.ioff()
+    plt.show()
 
 
 if __name__ == "__main__":

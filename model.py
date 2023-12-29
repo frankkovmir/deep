@@ -1,3 +1,8 @@
+"""
+author: Frank Kovmir
+frankkovmir@gmail.com
+"""
+
 import torch.nn as nn
 import torch.nn.functional as F
 
