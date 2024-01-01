@@ -8,25 +8,28 @@ import random
 
 class SpaceDodgerGame:
     def __init__(self):
+        """
+        Initialisiert das Spiel und setzt grundlegende Parameter wie Spielgeschwindigkeit und Grafikelemente.
+        """
+
         pygame.init()
 
         self.clock = pygame.time.Clock()
-        self.dodge_reward = 0.1
-        self.asteroids_per_level = 1
-        self.current_level = 1
-        self.spawned_asteroids_count = 0
+        self.dodge_reward = 0.1  # Belohnungspunkte für das Ausweichen
+        self.asteroids_per_level = 1  # Anzahl der Asteroiden pro Level
+        self.current_level = 1  # Startlevel
+        self.spawned_asteroids_count = 0  # Anzahl der bereits erschienenen Asteroiden
 
-        # hole parameter
+        # Parameter für die Lücke in der Asteroidenkette
         self.hole_position = 0
         self.hole_size = 0
 
-        # Load asteroid sprite sheet
+        # Laden des Asteroiden-Sprite-Sheets und Extraktion einzelner Sprites
         asteroid_sheet = pygame.image.load('assets/asteroids.png')
         asteroid_sprite_width, asteroid_sprite_height = asteroid_sheet.get_size()
         asteroid_sprite_width //= 8
         asteroid_sprite_height //= 8
 
-        # Extract individual asteroid sprites
         self.asteroid_sprites = []
         for row in range(8):
             for col in range(8):
@@ -34,7 +37,7 @@ class SpaceDodgerGame:
                 asteroid_sprite = asteroid_sheet.subsurface(rect)
                 self.asteroid_sprites.append(asteroid_sprite)
 
-        # Load spaceship sprites
+        # Laden der Raumschiff-Sprites
         sprite_sheet = pygame.image.load('assets/ship.png')
         sprite_width, sprite_height = sprite_sheet.get_size()
         sprite_width //= 5
@@ -49,24 +52,25 @@ class SpaceDodgerGame:
                                                    (sprite_width * scale_factor, sprite_height * scale_factor))
             self.spaceships.append(scaled_sprite)
 
+        # Erstellen von Masken für die Kollisionserkennung
         self.spaceship_masks = [pygame.mask.from_surface(sprite) for sprite in self.spaceships]
 
-        # Spaceship animation variables
+        # Variablen für die Animation des Raumschiffs
         self.current_spaceship_index = 0
         self.animation_frame_count = 0
         self.animation_speed = 5  # Lower is faster
 
-        # Game window dimensions
+        # Spielfenster-Größe
         self.width, self.height = 288, 512
         self.screen = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption("Space Dodger")
 
-        # Spaceship properties
+        # Eigenschaften des Raumschiffs
         self.spaceship_width, self.spaceship_height = self.spaceships[0].get_size()
         self.spaceship_speed = 3
         self.spaceship = None
 
-        # Asteroid properties
+        # Eigenschaften der Asteroiden
         self.asteroid_size = 40
         self.asteroid_speed = 1
         self.asteroid_spawn_rate = 100 # not spawning simultatnously
@@ -74,6 +78,10 @@ class SpaceDodgerGame:
         self.reset()
 
     def reset(self):
+        """
+        Setzt das Spiel nach einer Kollision zurück. Das Raumschiff und die Asteroiden werden neu positioniert und das Level wird zurückgesetzt.
+        """
+
         self.spaceship = pygame.Rect(self.width // 2 - self.spaceship_width // 2,
                                      self.height - self.spaceship_height - 10,
                                      self.spaceship_width, self.spaceship_height)
@@ -86,6 +94,10 @@ class SpaceDodgerGame:
         return self.get_state()
 
     def update_spaceship_animation(self):
+        """
+        Aktualisiert die Animation des Raumschiffs durch Wechsel der Sprites.
+        """
+
         self.animation_frame_count += 1
         if self.animation_frame_count >= self.animation_speed:
             self.animation_frame_count = 0
@@ -93,36 +105,40 @@ class SpaceDodgerGame:
             self.spaceship_mask = self.spaceship_masks[self.current_spaceship_index]
 
     def spawn_asteroid_chain(self):
-        # Define the range where the hole can be spawned to avoid the spaceship's starting position.
+        """
+        Erzeugt eine Kette von Asteroiden mit einer Lücke, durch die das Raumschiff hindurchfliegen kann. Die Position und Größe der Lücke werden zufällig bestimmt.
+        """
+
+        # Festlegen des Bereichs, in dem das Loch erscheinen kann, um die Startposition des Raumschiffs zu vermeiden
         min_x = 0
         max_x = self.width - self.asteroid_size * 3
 
-        # Determine the spaceship's current position
+        # Bestimmung der aktuellen Position des Raumschiffs
         spaceship_x_center = self.spaceship.x + self.spaceship_width // 2
 
-        # Define the range around the spaceship where the hole should not be generated
+        # Definieren eines Bereichs um das Raumschiff, in dem das Loch nicht erzeugt werden sollte
         exclusion_zone = self.spaceship_width * 2
 
-        # Split the possible hole positions into two ranges to avoid the exclusion zone
+        # Aufteilen der möglichen Lochpositionen in zwei Bereiche, um die Ausschlusszone zu vermeiden
         left_range = [x for x in range(min_x, spaceship_x_center - exclusion_zone) if
                       x + self.asteroid_size * 3 <= max_x]
         right_range = [x for x in range(spaceship_x_center + exclusion_zone, max_x) if x >= min_x]
 
-        # Check if there are valid positions in the ranges
+        # Überprüfen, ob gültige Positionen in den Bereichen vorhanden sind
         if not left_range and not right_range:
             print("No valid positions for the hole. Adjust game parameters.")
             return
 
-        # Randomly select whether the hole will be to the left or right of the exclusion zone
+        # Zufällige Auswahl, ob das Loch links oder rechts von der Ausschlusszone sein wird
         if left_range and (not right_range or random.random() > 0.5):
             hole_position = random.choice(left_range)
         else:
             hole_position = random.choice(right_range)
 
-        # Determine the size of the hole
+        # Bestimmen der Größe des Lochs
         hole_size = random.randint(self.asteroid_size * 2, self.asteroid_size * 3)
 
-        # Spawn the asteroids, leaving a hole at the chosen position
+        # Erzeugen der Asteroiden, wobei eine Lücke an der gewählten Position gelassen wird
         for x in range(0, self.width, self.asteroid_size):
             if not hole_position <= x < hole_position + hole_size:
                 asteroid_sprite = random.choice(self.asteroid_sprites)
@@ -130,29 +146,34 @@ class SpaceDodgerGame:
                 self.asteroids.append(
                     [scaled_sprite, pygame.Rect(x, 0, self.asteroid_size, self.asteroid_size), self.asteroid_speed])
 
-        # Update the hole position and size attributes
+        # Aktualisieren der Lochposition und -größe
         self.hole_position = hole_position
         self.hole_size = hole_size
 
     def step(self, action):
+        """
+        Führt einen Schritt im Spiel durch, basierend auf der übergebenen Aktion.
+        Aktualisiert den Spielzustand und gibt den neuen Zustand, die Belohnung und ein Flag zurück, ob das Spiel beendet ist.
+        """
+
         collision_penalty = -1
-        successful_hole_navigation_reward = 0.5  # Reward for successfully navigating through the hole
+        successful_hole_navigation_reward = 0.5  # Belohnung für das erfolgreiche Navigieren durch die Lücke
         reward = 0
         done = False
 
-        # Movement actions
+        # Bewegungsaktionen des Agenten
         if action == 0 and self.spaceship.x > 0:
             self.spaceship.x -= min(self.spaceship_speed, self.spaceship.x)
         elif action == 1 and self.spaceship.x < self.width - self.spaceship_width:
             self.spaceship.x += min(self.spaceship_speed, self.width - self.spaceship_width - self.spaceship.x)
 
-        # Spawn a chain of asteroids with a hole
+        # Erscheinen neuer Asteroidenketten
         if self.spawned_asteroids_count < self.asteroids_per_level:
             if self.frame_count % self.asteroid_spawn_rate == 0:
                 self.spawn_asteroid_chain()
                 self.spawned_asteroids_count += 1
 
-        # Calculate the hole's position and size
+        # Berechnen der Position und Größe der Lücke zur Überganbe an den Agenten
         if self.asteroids:
             all_x_positions = [asteroid[1].x for asteroid in self.asteroids]
             hole_start = max(0, min(all_x_positions) - self.asteroid_size)
@@ -161,7 +182,8 @@ class SpaceDodgerGame:
             hole_start = 0
             hole_end = self.width
 
-        # Check collision and update dodged asteroids count
+        # Kollision überprüfen und Belohnung oder Strafe verteilen
+
         for asteroid in self.asteroids:
             asteroid_sprite, asteroid_rect, _ = asteroid
             prev_y = asteroid_rect.y
@@ -182,10 +204,10 @@ class SpaceDodgerGame:
                 if hole_start <= self.spaceship.x <= hole_end:
                     reward += successful_hole_navigation_reward
 
-        # Remove asteroids that have gone off-screen
+        # Asteroiden entfernen die den utnenren Rand verlassen haben
         self.asteroids = [asteroid for asteroid in self.asteroids if asteroid[1].y <= self.height]
 
-        # Check if all asteroids have been dodged or gone off-screen
+        # Levelübergang vorbereiten
         if len(self.asteroids) == 0 and self.spawned_asteroids_count >= self.asteroids_per_level:
             self.prepare_next_level()
             done = False
@@ -198,28 +220,39 @@ class SpaceDodgerGame:
 
         return self.get_state(), reward, done
     def prepare_next_level(self):
+        """Übergang ins nächste Level
+        """
         self.current_level += 1
         #self.asteroids_per_level += 1
         self.asteroid_speed += 0.5
         self.spawned_asteroids_count = 0
         self.asteroids = []
-        print(f"Moving to Level: {self.current_level}, Asteroids This Level: {self.asteroids_per_level}")
+        print(f"Nächstes Level: {self.current_level}")
 
     def get_state(self):
+        """
+        Gibt den aktuellen Zustand des Spiels zurück. Dieser Zustand wird in Form einer Liste von Werten zurückgegeben, die verschiedene Aspekte des Spiels repräsentieren.
+        Dazu gehören die X- und Y-Position des Raumschiffs, die Position und Größe der Lücke in der Asteroidenkette und die Geschwindigkeit der Asteroiden.
+        """
 
         pygame.display.flip()
 
         state = [
-            self.spaceship.x / self.width,  # Spaceship X position
-            self.spaceship.y / self.height,  # Spaceship Y position
-            self.hole_position / self.width,  # Hole X position
-            self.hole_size / self.width,  # Hole size
-            self.asteroid_speed
+            self.spaceship.x / self.width,  # Relative X-Position des Raumschiffs
+            self.spaceship.y / self.height,  # Relative Y-Position des Raumschiffs
+            self.hole_position / self.width,  # Relative X-Position der Lücke
+            self.hole_size / self.width,  # Relative Größe der Lücke
+            self.asteroid_speed  # Geschwindigkeit der Asteroiden
         ]
         #print(state)
         return state
 
     def render(self,action):
+        """
+        Zeichnet alle Spielelemente auf dem Bildschirm. Dies umfasst das Raumschiff, die Asteroiden und die Spielinformationen wie das aktuelle Level
+        und die ausgeführte Aktion (Debugzwecke).
+        """
+
         self.screen.fill((0, 0, 0))
 
         current_spaceship = self.spaceships[self.current_spaceship_index]
