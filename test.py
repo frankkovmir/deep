@@ -19,10 +19,7 @@ def get_args():
 
 def test(opt):
     """
-    Testet das trainierte Deep Q-Network-Modell im SpaceDodger-Spiel.
-
-    Parameter:
-    - opt: Geparse-te Befehlszeilenargumente, die den Pfad des gespeicherten Modells und die Anzahl der Testepisoden enthalten.
+    Testet das trainierte Deep Q-Network-Modell im SpaceDodger-Spiel mit der definierten ANzahl Episoden
     """
     input_size = 5  # Größe des Eingabevektors
     output_size = 2  # Größe des Ausgabevektors
