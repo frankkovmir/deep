@@ -79,7 +79,6 @@ def get_args():
     parser.add_argument("--replay_memory_size", type=int, default=200000)
     parser.add_argument("--log_path", type=str, default="tensorboard")
     parser.add_argument("--saved_path", type=str, default="trained_models")
-    parser.add_argument("--target_update", type=int, default=3)
     parser.add_argument("--tau", type=float, default=0.010)
     args = parser.parse_args()
     return args
